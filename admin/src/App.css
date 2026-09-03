@@ -4,15 +4,10 @@
   padding: 0;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #F1F5F9;
-  color: #1E293B;
-}
-
 .app {
   display: flex;
   min-height: 100vh;
+  width: 100%;
 }
 
 /* ── Sidebar ── */
@@ -70,10 +65,31 @@ body {
   color: #93C5FD;
 }
 
-.device-list {
+.devices-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+}
+
+.devices-caret {
+  margin-left: 6px;
+  opacity: 0.8;
+}
+
+.device-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding-top: 10px;
 }
 
 .device-row {
@@ -81,32 +97,35 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 10px;
-  padding: 10px 12px;
+  padding: 6px 2px;
 }
 
-.device-id {
+.device-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #E2E8F0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-empty {
   font-size: 12px;
-  font-weight: 600;
-  word-break: break-all;
-}
-
-.device-meta {
-  font-size: 11px;
   color: #93C5FD;
-  margin-top: 2px;
+  padding: 4px 0;
 }
 
 .sidebar .delete-btn {
   filter: grayscale(1) brightness(2);
+  flex-shrink: 0;
 }
 
 /* ── Main ── */
 .main {
   flex: 1;
-  padding: 40px;
-  max-width: 860px;
+  width: 100%;
+  padding: 40px 48px;
+  max-width: none;
 }
 
 .page-title {
@@ -142,20 +161,30 @@ body {
 
 .form-group input,
 .form-group textarea {
-  border: 1.5px solid #E2E8F0;
+  border: 1.5px solid #CBD5E1;
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 15px;
-  color: #1E293B;
-  transition: border-color 0.2s;
+  color: #0F172A;
+  background: #FFFFFF;
+  transition: border-color 0.2s, box-shadow 0.2s;
   resize: vertical;
   font-family: inherit;
+  -webkit-text-fill-color: #0F172A;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #94A3B8;
+  opacity: 1;
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
   border-color: #1E3A5F;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+  background: #FFFFFF;
 }
 
 .type-buttons {

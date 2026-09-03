@@ -12,9 +12,7 @@ import { registerDevice } from './registerDevice';
 import { loadClientName, saveClientName } from './clientName';
 import { markNotificationDelivered, markNotificationRead } from './receipts';
 
-const canUsePush =
-  Constants.executionEnvironment === 'bare' ||
-  Constants.executionEnvironment === 'standalone';
+const canUsePush = Constants.executionEnvironment !== 'storeClient';
 
 // Colores por tipo de notificación
 const TYPE_COLORS = {
@@ -56,7 +54,7 @@ export default function App() {
       const id = await registerDevice({ token, expoGo, clientName });
       if (!cancelled) {
         setDeviceId(id);
-        setDeviceStatus(token ? `${clientName} · Push activo` : clientName);
+        setDeviceStatus(token ? `${clientName} · Push activo` : `${clientName} · Sin token push`);
       }
     };
 
@@ -67,9 +65,12 @@ export default function App() {
         const token = await push.registerForPushNotificationsAsync();
         if (cancelled) return;
         await afterRegister(token, false);
+        if (!cancelled && !token) {
+          setDeviceStatus(`${clientName} · Sin token push`);
+        }
       }).catch((err) => {
         console.log('Push no disponible:', err?.message ?? err);
-        afterRegister(null, true).catch(() => {
+        afterRegister(null, false).catch(() => {
           if (!cancelled) setDeviceStatus('No se pudo registrar');
         });
       });

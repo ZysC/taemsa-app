@@ -44,6 +44,7 @@ export default function App() {
   const [pushDevices, setPushDevices] = useState(0);
   const [success, setSuccess] = useState('');
   const [openReceipts, setOpenReceipts] = useState(null);
+  const [devicesOpen, setDevicesOpen] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'));
@@ -113,9 +114,40 @@ export default function App() {
           <span className="logo-sub">Panel de Notificaciones</span>
         </div>
 
-        <div className="stat-box">
-          <span className="stat-number">{deviceList.length}</span>
-          <span className="stat-label">Dispositivos registrados</span>
+        <div className="stat-box devices-stat">
+          <button
+            type="button"
+            className="devices-toggle"
+            onClick={() => setDevicesOpen((open) => !open)}
+            aria-expanded={devicesOpen}
+          >
+            <span className="stat-number">{deviceList.length}</span>
+            <span className="stat-label">
+              Dispositivos registrados
+              <span className="devices-caret">{devicesOpen ? '▴' : '▾'}</span>
+            </span>
+          </button>
+
+          {devicesOpen && (
+            <div className="device-list">
+              {deviceList.length === 0 ? (
+                <div className="device-empty">Ningún dispositivo</div>
+              ) : (
+                deviceList.map((d) => (
+                  <div key={d.id} className="device-row">
+                    <span className="device-name">{d.clientName || d.id}</span>
+                    <button
+                      className="delete-btn"
+                      onClick={() => handleDeleteDevice(d.id)}
+                      title="Eliminar dispositivo"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="stat-box">
@@ -127,31 +159,6 @@ export default function App() {
           <span className="stat-number">{notifications.length}</span>
           <span className="stat-label">Notificaciones enviadas</span>
         </div>
-
-        {deviceList.length > 0 && (
-          <div className="device-list">
-            {deviceList.map((d) => (
-              <div key={d.id} className="device-row">
-                <div>
-                  <div className="device-id">{d.clientName || d.id}</div>
-                  <div className="device-meta">
-                    {d.clientName ? `${d.id} · ` : ''}
-                    {d.platform || '—'}
-                    {d.expoGo ? ' · Expo Go' : ''}
-                    {d.token ? ' · push' : ''}
-                  </div>
-                </div>
-                <button
-                  className="delete-btn"
-                  onClick={() => handleDeleteDevice(d.id)}
-                  title="Eliminar dispositivo"
-                >
-                  🗑️
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </aside>
 
       {/* Main content */}
