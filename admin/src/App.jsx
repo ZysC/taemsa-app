@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
 import {
-  collection, addDoc, onSnapshot, orderBy,
-  query, serverTimestamp, deleteDoc, doc,
+  collection, onSnapshot, orderBy,
+  query, deleteDoc, doc,
 } from 'firebase/firestore';
+import { createNotificationWithReceipts, sendExpoPushes } from './sendPush';
 import './App.css';
 
 const TYPES = [
@@ -26,12 +27,23 @@ const TYPE_ICONS = {
   error: '🔴', problema: '⚠️', actualizacion: '🔵', novedad: '🟢', info: 'ℹ️',
 };
 
+function receiptList(receipts) {
+  return Object.entries(receipts || {}).map(([id, r]) => ({
+    id,
+    clientName: r.clientName || id,
+    delivered: !!(r.deliveredAt),
+    read: !!(r.readAt),
+  }));
+}
+
 export default function App() {
   const [form, setForm] = useState({ title: '', body: '', type: 'info' });
   const [notifications, setNotifications] = useState([]);
   const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [devices, setDevices] = useState(0);
+  const [deviceList, setDeviceList] = useState([]);
+  const [pushDevices, setPushDevices] = useState(0);
+  const [success, setSuccess] = useState('');
+  const [openReceipts, setOpenReceipts] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'));
@@ -39,9 +51,19 @@ export default function App() {
       setNotifications(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    const unsub2 = onSnapshot(collection(db, 'devices'), (snap) => {
-      setDevices(snap.size);
-    });
+    const unsub2 = onSnapshot(
+      collection(db, 'devices'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setDeviceList(list);
+        setPushDevices(list.filter((d) => {
+          return typeof d.token === 'string' && d.token.startsWith('ExponentPushToken[');
+        }).length);
+      },
+      (err) => {
+        console.error('Error leyendo devices:', err);
+      },
+    );
 
     return () => { unsub(); unsub2(); };
   }, []);
@@ -51,13 +73,20 @@ export default function App() {
     if (!form.title.trim() || !form.body.trim()) return;
     setSending(true);
     try {
-      await addDoc(collection(db, 'notifications'), {
-        ...form,
-        createdAt: serverTimestamp(),
-      });
+      const created = await createNotificationWithReceipts(form);
+      let pushResult = { sent: 0 };
+      try {
+        pushResult = await sendExpoPushes({ ...form, notificationId: created.id, devices: created.devices });
+      } catch (pushErr) {
+        console.error(pushErr);
+      }
       setForm({ title: '', body: '', type: 'info' });
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      if (pushResult.sent > 0) {
+        setSuccess(`Enviada al listado y a ${pushResult.sent} dispositivo(s) con push.`);
+      } else {
+        setSuccess('Enviada al listado de la app. Ningún dispositivo tiene token push todavía (Expo Go no lo permite).');
+      }
+      setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
       alert('Error al enviar: ' + err.message);
     } finally {
@@ -70,6 +99,11 @@ export default function App() {
     await deleteDoc(doc(db, 'notifications', id));
   };
 
+  const handleDeleteDevice = async (id) => {
+    if (!confirm('¿Eliminar este dispositivo?')) return;
+    await deleteDoc(doc(db, 'devices', id));
+  };
+
   return (
     <div className="app">
       {/* Sidebar */}
@@ -80,14 +114,44 @@ export default function App() {
         </div>
 
         <div className="stat-box">
-          <span className="stat-number">{devices}</span>
+          <span className="stat-number">{deviceList.length}</span>
           <span className="stat-label">Dispositivos registrados</span>
+        </div>
+
+        <div className="stat-box">
+          <span className="stat-number">{pushDevices}</span>
+          <span className="stat-label">Con token push</span>
         </div>
 
         <div className="stat-box">
           <span className="stat-number">{notifications.length}</span>
           <span className="stat-label">Notificaciones enviadas</span>
         </div>
+
+        {deviceList.length > 0 && (
+          <div className="device-list">
+            {deviceList.map((d) => (
+              <div key={d.id} className="device-row">
+                <div>
+                  <div className="device-id">{d.clientName || d.id}</div>
+                  <div className="device-meta">
+                    {d.clientName ? `${d.id} · ` : ''}
+                    {d.platform || '—'}
+                    {d.expoGo ? ' · Expo Go' : ''}
+                    {d.token ? ' · push' : ''}
+                  </div>
+                </div>
+                <button
+                  className="delete-btn"
+                  onClick={() => handleDeleteDevice(d.id)}
+                  title="Eliminar dispositivo"
+                >
+                  🗑️
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </aside>
 
       {/* Main content */}
@@ -143,7 +207,7 @@ export default function App() {
 
           {success && (
             <div className="success-msg">
-              ✅ Notificación enviada correctamente a {devices} dispositivos
+              {success}
             </div>
           )}
         </form>
@@ -159,6 +223,10 @@ export default function App() {
               const s = TYPE_STYLES[n.type] || TYPE_STYLES.info;
               const icon = TYPE_ICONS[n.type] || 'ℹ️';
               const date = n.createdAt?.toDate?.()?.toLocaleString('es-ES') || '';
+              const rows = receiptList(n.receipts);
+              const delivered = rows.filter((r) => r.delivered).length;
+              const read = rows.filter((r) => r.read).length;
+              const open = openReceipts === n.id;
               return (
                 <div
                   key={n.id}
@@ -184,6 +252,33 @@ export default function App() {
                   </div>
                   <p className="notif-body">{n.body}</p>
                   {date && <span className="notif-date">{date}</span>}
+                  <button
+                    type="button"
+                    className="receipts-toggle"
+                    onClick={() => setOpenReceipts(open ? null : n.id)}
+                  >
+                    Entregada {delivered}/{rows.length || 0} · Leída {read}/{rows.length || 0}
+                    {open ? ' ▴' : ' ▾'}
+                  </button>
+                  {open && (
+                    <div className="receipts">
+                      {rows.length === 0 ? (
+                        <div className="receipt-empty">Sin destinatarios registrados en el envío</div>
+                      ) : (
+                        rows.map((r) => (
+                          <div key={r.id} className="receipt-row">
+                            <span className="receipt-name">{r.clientName}</span>
+                            <span className={`receipt-pill ${r.delivered ? 'ok' : 'pending'}`}>
+                              {r.delivered ? 'Entregada' : 'No entregada'}
+                            </span>
+                            <span className={`receipt-pill ${r.read ? 'ok' : 'pending'}`}>
+                              {r.read ? 'Leída' : 'No leída'}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

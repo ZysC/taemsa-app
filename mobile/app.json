@@ -1,17 +1,35 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "TAEMSA",
     "slug": "mobile",
+    "scheme": "taemsa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#1E3A5F",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.taemsa.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
     },
     "android": {
+      "package": "com.taemsa.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1E3A5F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -19,6 +37,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "86f94975-25df-4df6-96b8-6596e48e798b"
+      }
+    },
+    "owner": "ruben-taemsa"
   }
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "531023823804",
+    "project_id": "taemsa-app",
+    "storage_bucket": "taemsa-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531023823804:android:77327c6df8fac98944e1b9",
+        "android_client_info": {
+          "package_name": "com.taemsa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBy2uGLX5j1j1dxoJY1t5pzttTj7IUqWbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

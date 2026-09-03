@@ -70,6 +70,38 @@ body {
   color: #93C5FD;
 }
 
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.device-id {
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.device-meta {
+  font-size: 11px;
+  color: #93C5FD;
+  margin-top: 2px;
+}
+
+.sidebar .delete-btn {
+  filter: grayscale(1) brightness(2);
+}
+
 /* ── Main ── */
 .main {
   flex: 1;
@@ -259,4 +291,62 @@ body {
   color: #94A3B8;
   margin-top: 8px;
   text-align: right;
+}
+
+.receipts-toggle {
+  margin-top: 12px;
+  background: rgba(30, 58, 95, 0.08);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1E3A5F;
+  cursor: pointer;
+}
+
+.receipts {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(255,255,255,0.7);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.receipt-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.receipt-pill {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.receipt-pill.ok {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.receipt-pill.pending {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.receipt-empty {
+  font-size: 12px;
+  color: #64748B;
 }
