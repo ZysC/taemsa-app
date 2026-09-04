@@ -1,5 +1,6 @@
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, getDocs, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
+import { deviceWantsChannel } from './prefs';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_BATCH_SIZE = 100;
@@ -8,26 +9,47 @@ function isExpoPushToken(token) {
   return typeof token === 'string' && token.startsWith('ExponentPushToken[');
 }
 
-export async function createNotificationWithReceipts(form) {
+async function loadDevices() {
   const snap = await getDocs(collection(db, 'devices'));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function createNotificationWithReceipts(form) {
+  const devices = await loadDevices();
   const receipts = {};
 
-  snap.docs.forEach((d) => {
-    const data = d.data();
+  devices.forEach((d) => {
+    if (!deviceWantsChannel(d, 'alerts')) return;
     receipts[d.id] = {
-      clientName: data.clientName || d.id,
-      platform: data.platform || '',
-      expoGo: !!data.expoGo,
+      clientName: d.clientName || d.id,
+      platform: d.platform || '',
+      expoGo: !!d.expoGo,
     };
   });
 
   const docRef = await addDoc(collection(db, 'notifications'), {
     ...form,
+    channel: 'alerts',
     createdAt: serverTimestamp(),
     receipts,
   });
 
-  return { id: docRef.id, devices: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  return { id: docRef.id, devices };
+}
+
+export async function createFarmaticUpdate(form) {
+  const docRef = await addDoc(collection(db, 'farmaticUpdates'), {
+    version: (form.version || '').trim(),
+    title: form.title.trim(),
+    body: form.body.trim(),
+    notifyPush: !!form.notifyPush,
+    createdAt: serverTimestamp(),
+  });
+  return { id: docRef.id };
+}
+
+export async function deleteFarmaticUpdate(id) {
+  await deleteDoc(doc(db, 'farmaticUpdates', id));
 }
 
 async function postExpoBatch(messages) {
@@ -46,20 +68,24 @@ async function postExpoBatch(messages) {
   }
 }
 
-export async function sendExpoPushes({ title, body, type, notificationId, devices }) {
-  const list = devices ?? (await getDocs(collection(db, 'devices'))).docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-  }));
+export async function sendExpoPushes({
+  title,
+  body,
+  type,
+  notificationId,
+  devices,
+  channel = 'alerts',
+}) {
+  const list = devices ?? (await loadDevices());
 
   const messages = list
-    .filter((d) => isExpoPushToken(d.token))
+    .filter((d) => isExpoPushToken(d.token) && deviceWantsChannel(d, channel))
     .map((d) => ({
       to: d.token,
       sound: 'default',
       title,
       body,
-      data: { type, notificationId },
+      data: { type: type || channel, notificationId: notificationId || '', channel },
       channelId: 'default',
     }));
 

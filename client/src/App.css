@@ -258,3 +258,139 @@ body {
   margin-bottom: 12px;
   font-size: 13px;
 }
+
+.tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.tabs button {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 12px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748B;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs button.active {
+  color: #1E3A5F;
+  border-bottom-color: #1E3A5F;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  padding-left: 4px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 16px;
+}
+
+.timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 12px;
+  bottom: 0;
+  width: 2px;
+  background: #BFDBFE;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #1E3A5F;
+  border: 2px solid #93C5FD;
+  margin-top: 6px;
+}
+
+.timeline-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.timeline-card .version {
+  display: inline-block;
+  background: #DBEAFE;
+  color: #1E3A5F;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-bottom: 6px;
+}
+
+.timeline-card strong {
+  display: block;
+  font-size: 15px;
+  color: #1E293B;
+  margin-bottom: 6px;
+}
+
+.timeline-card p {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.timeline-card .date {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94A3B8;
+  text-align: right;
+}
+
+.prefs h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.prefs .hint {
+  margin-bottom: 16px;
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: white;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  cursor: pointer;
+}
+
+.pref-row strong {
+  display: block;
+  font-size: 15px;
+  color: #1E293B;
+}
+
+.pref-row span {
+  display: block;
+  font-size: 13px;
+  color: #64748B;
+  margin-top: 3px;
+}
+
+.pref-row input {
+  width: 18px;
+  height: 18px;
+}

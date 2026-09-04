@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
@@ -12,13 +13,32 @@ const firebaseConfig = {
   measurementId: "G-9EN6SY5K08"
 };
 
-// Firebase Console → Project settings → Cloud Messaging → Web Push certificates
 export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+let authReady = null;
 let messagingPromise = null;
+
+export function ensureAppAuth() {
+  if (!authReady) {
+    authReady = new Promise((resolve, reject) => {
+      const unsub = onAuthStateChanged(auth, (user) => {
+        unsub();
+        if (user) {
+          resolve(user);
+          return;
+        }
+        signInAnonymously(auth)
+          .then((cred) => resolve(cred.user))
+          .catch(reject);
+      });
+    });
+  }
+  return authReady;
+}
 
 export async function getFirebaseMessaging() {
   if (!messagingPromise) {

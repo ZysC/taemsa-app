@@ -1,35 +1,65 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function onlyUpdatingReceipts() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receipts']);
+    // Solo UIDs presentes en /admins/{uid} (créalos en Firebase Console).
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function validDeviceWrite() {
+    function onlyUpdatingReceipts() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys()
+        .hasOnly(['receipts']);
+    }
+
+    function validDeviceData() {
       let data = request.resource.data;
-      return data.keys().hasAll(['clientName', 'platform'])
+      return data.keys().hasAll(['clientName', 'platform', 'uid'])
         && data.clientName is string
         && data.clientName.size() > 0
         && data.clientName.size() <= 80
-        && data.platform is string;
+        && data.platform is string
+        && data.uid is string
+        && data.uid == request.auth.uid;
     }
 
-    // Avisos: la app los lee; solo admin crea/borra;
-    // la app puede actualizar solo "receipts" (entregada/leída).
+    function canClaimOrOwnDevice() {
+      return !('uid' in resource.data)
+        || resource.data.uid == request.auth.uid;
+    }
+
+    // Lista de administradores: cada user puede leer su doc; escritura solo Console.
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if false;
+    }
+
+    // Avisos: requieren sesión (admin o app anónima).
     match /notifications/{notificationId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || onlyUpdatingReceipts();
+      allow update: if isAdmin()
+        || (isSignedIn() && onlyUpdatingReceipts());
     }
 
-    // Dispositivos: la app registra/actualiza; solo admin lista y borra.
+    // Actualizaciones Farmatic
+    match /farmaticUpdates/{updateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Dispositivos: cada app solo escribe el suyo (uid); admin lista/borra.
     match /devices/{deviceId} {
       allow read, delete: if isAdmin();
-      allow create, update: if validDeviceWrite();
+      allow create: if isSignedIn() && validDeviceData();
+      allow update: if isAdmin()
+        || (isSignedIn() && validDeviceData() && canClaimOrOwnDevice()
+            && request.resource.data.uid == request.auth.uid);
     }
   }
 }

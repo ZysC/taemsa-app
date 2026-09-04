@@ -1,8 +1,5 @@
-// CONFIGURACIÓN FIREBASE
-// Reemplaza estos valores con los de tu proyecto Firebase
-// Firebase Console → tu proyecto → Configuración del proyecto → Tus apps → Web app
-
 import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -16,4 +13,26 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+let authReady = null;
+
+/** Garantiza sesión anónima antes de leer/escribir Firestore. */
+export function ensureAppAuth() {
+  if (!authReady) {
+    authReady = new Promise((resolve, reject) => {
+      const unsub = onAuthStateChanged(auth, (user) => {
+        unsub();
+        if (user) {
+          resolve(user);
+          return;
+        }
+        signInAnonymously(auth)
+          .then((cred) => resolve(cred.user))
+          .catch(reject);
+      });
+    });
+  }
+  return authReady;
+}

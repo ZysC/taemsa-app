@@ -15,25 +15,24 @@ function isWebFcmToken(token) {
   return typeof token === 'string' && token.length > 20 && !isExpoToken(token);
 }
 
-exports.sendWebPushesOnCreate = onDocumentCreated('notifications/{notificationId}', async (event) => {
-  const snap = event.data;
-  if (!snap) return;
+function wantsChannel(data, channel) {
+  const prefs = data?.prefs || {};
+  if (channel === 'farmatic') return prefs.farmatic !== false;
+  return prefs.alerts !== false;
+}
 
-  const data = snap.data() || {};
-  const notificationId = event.params.notificationId;
-  const title = data.title || 'TAEMSA';
-  const body = data.body || '';
-  const type = data.type || 'info';
-
+async function sendWebFcm({ title, body, type, notificationId, channel }) {
   const devices = await getFirestore().collection('devices').get();
   const tokens = [];
-  devices.forEach((doc) => {
-    const token = doc.data()?.token;
+  devices.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    if (!wantsChannel(data, channel)) return;
+    const token = data.token;
     if (isWebFcmToken(token)) tokens.push(token);
   });
 
   if (tokens.length === 0) {
-    console.log('No web FCM tokens to notify');
+    console.log(`No web FCM tokens for channel=${channel}`);
     return;
   }
 
@@ -42,24 +41,60 @@ exports.sendWebPushesOnCreate = onDocumentCreated('notifications/{notificationId
 
   for (let i = 0; i < tokens.length; i += chunkSize) {
     const chunk = tokens.slice(i, i + chunkSize);
-    // Data-only: una sola notificación la muestra el service worker
     const res = await messaging.sendEachForMulticast({
       tokens: chunk,
       data: {
         type: String(type),
-        notificationId: String(notificationId),
+        notificationId: String(notificationId || ''),
+        channel: String(channel),
         title: String(title),
         body: String(body),
       },
       webpush: {
         fcmOptions: {
-          link: 'https://taemsa-app.web.app/avisos/',
+          link: channel === 'farmatic'
+            ? 'https://taemsa-app.web.app/avisos/?tab=farmatic'
+            : 'https://taemsa-app.web.app/avisos/',
         },
         headers: {
           Urgency: 'high',
         },
       },
     });
-    console.log(`FCM web sent=${res.successCount} fail=${res.failureCount}`);
+    console.log(`FCM web channel=${channel} sent=${res.successCount} fail=${res.failureCount}`);
   }
+}
+
+exports.sendWebPushesOnCreate = onDocumentCreated('notifications/{notificationId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  const data = snap.data() || {};
+  await sendWebFcm({
+    title: data.title || 'TAEMSA',
+    body: data.body || '',
+    type: data.type || 'info',
+    notificationId: event.params.notificationId,
+    channel: 'alerts',
+  });
+});
+
+exports.sendWebPushesOnFarmaticCreate = onDocumentCreated('farmaticUpdates/{updateId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  const data = snap.data() || {};
+  if (!data.notifyPush) {
+    console.log('Farmatic update without notifyPush');
+    return;
+  }
+
+  const version = data.version ? `Farmatic ${data.version}` : 'Farmatic';
+  await sendWebFcm({
+    title: data.title || version,
+    body: data.body || 'Nueva actualización disponible',
+    type: 'farmatic',
+    notificationId: event.params.updateId,
+    channel: 'farmatic',
+  });
 });
