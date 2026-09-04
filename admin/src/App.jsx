@@ -60,7 +60,7 @@ function AdminPanel({ user }) {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setDeviceList(list);
         setPushDevices(list.filter((d) => {
-          return typeof d.token === 'string' && d.token.startsWith('ExponentPushToken[');
+          return typeof d.token === 'string' && d.token.length > 10;
         }).length);
       },
       (err) => {

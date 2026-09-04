@@ -1,6 +1,9 @@
 import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_BATCH_SIZE = 100;
+
 function isExpoPushToken(token) {
   return typeof token === 'string' && token.startsWith('ExponentPushToken[');
 }
@@ -27,6 +30,22 @@ export async function createNotificationWithReceipts(form) {
   return { id: docRef.id, devices: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
 }
 
+async function postExpoBatch(messages) {
+  const res = await fetch(EXPO_PUSH_URL, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(messages),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Expo Push HTTP ${res.status}`);
+  }
+}
+
 export async function sendExpoPushes({ title, body, type, notificationId, devices }) {
   const list = devices ?? (await getDocs(collection(db, 'devices'))).docs.map((d) => ({
     id: d.id,
@@ -48,18 +67,8 @@ export async function sendExpoPushes({ title, body, type, notificationId, device
     return { sent: 0, skipped: list.length };
   }
 
-  const res = await fetch('/api/expo-push', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(messages),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Expo Push HTTP ${res.status}`);
+  for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
+    await postExpoBatch(messages.slice(i, i + EXPO_BATCH_SIZE));
   }
 
   return { sent: messages.length, skipped: list.length - messages.length };

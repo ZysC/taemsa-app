@@ -146,6 +146,10 @@ export default function App() {
     });
   };
 
+  const unreadCount = deviceId
+    ? notifications.filter((n) => !n.receipts?.[deviceId]?.readAt).length
+    : 0;
+
   const renderItem = ({ item }) => {
     const type = TYPE_COLORS[item.type] || TYPE_COLORS.info;
     const date = item.createdAt?.toDate?.()?.toLocaleString('es-ES') || '';
@@ -154,16 +158,31 @@ export default function App() {
     return (
       <Pressable
         onPress={() => handleRead(item)}
-        style={[styles.card, { backgroundColor: type.bg, borderLeftColor: type.border }]}
+        style={[
+          styles.card,
+          { backgroundColor: type.bg, borderLeftColor: type.border },
+          !read && styles.cardUnread,
+          read && styles.cardRead,
+        ]}
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>{type.icon}</Text>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          {!read && <View style={styles.unreadDot} />}
+          <Text style={[styles.cardTitle, !read && styles.cardTitleUnread]}>{item.title}</Text>
+          {!read ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>Sin leer</Text>
+            </View>
+          ) : (
+            <Text style={styles.readLabel}>Leída</Text>
+          )}
         </View>
-        <Text style={styles.cardBody}>{item.body}</Text>
-        {date ? <Text style={styles.cardDate}>{date}</Text> : null}
-        <Text style={styles.cardHint}>{read ? 'Leída' : 'Toca para marcar como leída'}</Text>
+        <Text style={[styles.cardBody, read && styles.cardBodyRead]}>{item.body}</Text>
+        <View style={styles.cardFooter}>
+          {date ? <Text style={styles.cardDate}>{date}</Text> : <View />}
+          {!read ? (
+            <Text style={styles.cardHintUnread}>Toca para marcar como leída</Text>
+          ) : null}
+        </View>
       </Pressable>
     );
   };
@@ -226,6 +245,15 @@ export default function App() {
         <Text style={styles.headerTitle}>TAEMSA</Text>
         <Text style={styles.headerSubtitle}>Centro de Notificaciones</Text>
         <Text style={styles.headerStatus}>{deviceStatus}</Text>
+        {unreadCount > 0 ? (
+          <View style={styles.headerUnreadRow}>
+            <View style={styles.headerUnreadPill}>
+              <Text style={styles.headerUnreadText}>
+                {unreadCount === 1 ? '1 aviso sin leer' : `${unreadCount} avisos sin leer`}
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* Lista de notificaciones */}
@@ -323,6 +351,21 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
+  headerUnreadRow: {
+    marginTop: 12,
+  },
+  headerUnreadPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FBBF24',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  headerUnreadText: {
+    color: '#78350F',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   card: {
     borderRadius: 12,
     borderLeftWidth: 4,
@@ -332,6 +375,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+  },
+  cardUnread: {
+    borderLeftWidth: 6,
+    shadowOpacity: 0.14,
+    elevation: 3,
+  },
+  cardRead: {
+    opacity: 0.72,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -348,27 +399,49 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     flex: 1,
   },
+  cardTitleUnread: {
+    fontWeight: '800',
+  },
   cardBody: {
     fontSize: 14,
     color: '#475569',
     lineHeight: 20,
   },
+  cardBodyRead: {
+    color: '#64748B',
+  },
+  cardFooter: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   cardDate: {
     fontSize: 11,
     color: '#94A3B8',
-    marginTop: 8,
-    textAlign: 'right',
   },
-  cardHint: {
+  cardHintUnread: {
+    fontSize: 11,
+    color: '#1E3A5F',
+    fontWeight: '600',
+  },
+  unreadBadge: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  readLabel: {
     fontSize: 11,
     color: '#64748B',
-    marginTop: 6,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1E3A5F',
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
