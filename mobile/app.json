@@ -27,6 +27,7 @@
     },
     "android": {
       "package": "com.taemsa.app",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1E3A5F",

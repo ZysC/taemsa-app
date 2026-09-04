@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { db } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth, db } from './firebase';
 import {
   collection, onSnapshot, orderBy,
   query, deleteDoc, doc,
 } from 'firebase/firestore';
 import { createNotificationWithReceipts, sendExpoPushes } from './sendPush';
+import Login from './Login';
 import './App.css';
 
 const TYPES = [
@@ -36,7 +38,7 @@ function receiptList(receipts) {
   }));
 }
 
-export default function App() {
+function AdminPanel({ user }) {
   const [form, setForm] = useState({ title: '', body: '', type: 'info' });
   const [notifications, setNotifications] = useState([]);
   const [sending, setSending] = useState(false);
@@ -85,7 +87,7 @@ export default function App() {
       if (pushResult.sent > 0) {
         setSuccess(`Enviada al listado y a ${pushResult.sent} dispositivo(s) con push.`);
       } else {
-        setSuccess('Enviada al listado de la app. Ningún dispositivo tiene token push todavía (Expo Go no lo permite).');
+        setSuccess('Enviada al listado de la app. Ningún dispositivo tiene token push todavía.');
       }
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
@@ -107,7 +109,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="logo">
           <span className="logo-text">TAEMSA</span>
@@ -159,13 +160,18 @@ export default function App() {
           <span className="stat-number">{notifications.length}</span>
           <span className="stat-label">Notificaciones enviadas</span>
         </div>
+
+        <div className="sidebar-footer">
+          <div className="admin-email" title={user.email}>{user.email}</div>
+          <button type="button" className="logout-btn" onClick={() => signOut(auth)}>
+            Cerrar sesión
+          </button>
+        </div>
       </aside>
 
-      {/* Main content */}
       <main className="main">
         <h1 className="page-title">Enviar Notificación</h1>
 
-        {/* Formulario */}
         <form onSubmit={handleSend} className="form-card">
           <div className="form-group">
             <label>Tipo</label>
@@ -219,7 +225,6 @@ export default function App() {
           )}
         </form>
 
-        {/* Historial */}
         <h2 className="section-title">Historial de Notificaciones</h2>
 
         {notifications.length === 0 ? (
@@ -294,4 +299,26 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+export default function App() {
+  const [user, setUser] = useState(undefined);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  if (user === undefined) {
+    return (
+      <div className="login-page">
+        <div className="login-loading">Cargando…</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return <AdminPanel user={user} />;
 }

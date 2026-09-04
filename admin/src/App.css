@@ -379,3 +379,90 @@
   font-size: 12px;
   color: #64748B;
 }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-email {
+  font-size: 12px;
+  color: #93C5FD;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-btn {
+  background: rgba(255,255,255,0.1);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: rgba(255,255,255,0.16);
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at top, #2D527F 0%, transparent 55%),
+    #1E3A5F;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.login-logo {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #1E3A5F;
+}
+
+.login-sub {
+  font-size: 14px;
+  color: #64748B;
+}
+
+.login-error {
+  background: #FEE2E2;
+  color: #991B1B;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.login-loading {
+  color: white;
+  font-size: 16px;
+}
