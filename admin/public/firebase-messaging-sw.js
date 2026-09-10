@@ -22,13 +22,27 @@ messaging.onBackgroundMessage((payload) => {
 
   const title = payload.data?.title || 'TAEMSA';
   const body = payload.data?.body || '';
-  self.registration.showNotification(title, {
+  const show = self.registration.showNotification(title, {
     body,
     icon: '/avisos/icon-192.png',
     tag: payload.data?.notificationId || 'taemsa',
     renotify: true,
     data: payload.data || {},
   });
+
+  const badge = (async () => {
+    if (!('setAppBadge' in self.navigator)) return;
+    try {
+      const existing = await self.registration.getNotifications();
+      const count = Math.max(1, existing.length + 1);
+      await self.navigator.setAppBadge(count);
+    } catch (_) {
+      try { await self.navigator.setAppBadge(1); } catch (__) {}
+    }
+  })();
+
+  // Ensure both run
+  return Promise.all([show, badge]);
 });
 
 self.addEventListener('notificationclick', (event) => {

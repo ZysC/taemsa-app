@@ -582,3 +582,133 @@
   padding: 2px 8px;
   margin-bottom: 6px;
 }
+
+/* ── Mobile ── */
+@media (max-width: 860px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    position: relative;
+    top: auto;
+    padding: 20px 16px 16px;
+    gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  .logo {
+    grid-column: 1 / -1;
+    padding-bottom: 12px;
+  }
+
+  .logo-text {
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+
+  .side-nav {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .side-nav-btn {
+    flex: 1 1 calc(50% - 4px);
+    text-align: center;
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .devices-stat,
+  .sidebar-footer {
+    grid-column: 1 / -1;
+  }
+
+  .stat-box {
+    padding: 12px;
+  }
+
+  .stat-number {
+    font-size: 24px;
+  }
+
+  .sidebar-footer {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .admin-email {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .logout-btn {
+    flex-shrink: 0;
+  }
+
+  .main {
+    padding: 20px 16px 32px;
+  }
+
+  .page-title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .form-card {
+    padding: 18px;
+    margin-bottom: 28px;
+    gap: 16px;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    font-size: 16px; /* evita zoom automático en iOS */
+  }
+
+  .type-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .notif-card,
+  .timeline-card {
+    padding: 14px;
+  }
+
+  .timeline-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .login-page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 48px;
+  }
+
+  .login-card {
+    padding: 24px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .side-nav-btn {
+    flex: 1 1 100%;
+  }
+
+  .receipt-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

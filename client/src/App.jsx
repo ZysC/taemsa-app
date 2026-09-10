@@ -13,7 +13,8 @@ import {
   markNotificationRead,
   DEFAULT_PREFS,
 } from './clientApi';
-import { enableWebPush, listenForegroundMessages } from './webPush';
+import { enableWebPush, restoreWebPush, listenForegroundMessages } from './webPush';
+import { setWebAppBadge } from './appBadge';
 import './App.css';
 
 const TYPE_COLORS = {
@@ -76,16 +77,31 @@ export default function App() {
       }
       if (cancelled) return;
 
-      registerDevice(clientName, null, prefs)
-        .then((id) => {
+      try {
+        const existingToken = await restoreWebPush();
+        if (cancelled) return;
+
+        if (existingToken) {
+          tokenRef.current = existingToken;
+          const id = await registerDevice(clientName, existingToken, prefs);
           if (!cancelled) {
             setDeviceId(id);
+            setPushReady(true);
+            setDeviceStatus(`${clientName} · Push activo`);
+          }
+        } else {
+          const id = await registerDevice(clientName, null, prefs);
+          if (!cancelled) {
+            setDeviceId(id);
+            setPushReady(false);
             setDeviceStatus(`${clientName} · Web`);
           }
-        })
-        .catch((err) => {
-          if (!cancelled) setDeviceStatus('Error al registrar: ' + (err?.message || 'desconocido'));
-        });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setDeviceStatus('Error al registrar: ' + (err?.message || 'desconocido'));
+        }
+      }
 
       unsub = onSnapshot(
         query(collection(db, 'notifications'), orderBy('createdAt', 'desc')),
@@ -204,6 +220,10 @@ export default function App() {
   const unreadCount = deviceId && prefs.alerts
     ? notifications.filter((n) => !n.receipts?.[deviceId]?.readAt).length
     : 0;
+
+  useEffect(() => {
+    setWebAppBadge(unreadCount);
+  }, [unreadCount]);
 
   if (checkingName) {
     return (

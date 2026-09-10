@@ -8,6 +8,27 @@ export async function registerMessagingServiceWorker() {
   return navigator.serviceWorker.register('/firebase-messaging-sw.js');
 }
 
+/** Si ya hay permiso, recupera el token sin volver a pedir confirmación. */
+export async function restoreWebPush() {
+  if (!VAPID_KEY || !('Notification' in window)) return null;
+  if (Notification.permission !== 'granted') return null;
+
+  try {
+    const registration = await registerMessagingServiceWorker();
+    const messaging = await getFirebaseMessaging();
+    if (!messaging) return null;
+
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration,
+    });
+    return token || null;
+  } catch (err) {
+    console.log('No se pudo restaurar push:', err?.message || err);
+    return null;
+  }
+}
+
 export async function enableWebPush() {
   if (!VAPID_KEY) {
     throw new Error('Falta la clave VAPID (VITE_FIREBASE_VAPID_KEY).');

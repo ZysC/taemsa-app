@@ -85,6 +85,7 @@ export async function sendExpoPushes({
       sound: 'default',
       title,
       body,
+      badge: 1,
       data: { type: type || channel, notificationId: notificationId || '', channel },
       channelId: 'default',
     }));

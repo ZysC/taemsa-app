@@ -13,6 +13,7 @@ import { loadClientName, saveClientName } from './clientName';
 import { markNotificationDelivered, markNotificationRead } from './receipts';
 import { DEFAULT_PREFS } from './prefs';
 import { loadPrefs, savePrefs } from './prefsStorage';
+import { setAppIconBadge } from './badge';
 
 const canUsePush = Constants.executionEnvironment !== 'storeClient';
 
@@ -204,6 +205,10 @@ export default function App() {
   const unreadCount = deviceId && prefs.alerts
     ? notifications.filter((n) => !n.receipts?.[deviceId]?.readAt).length
     : 0;
+
+  useEffect(() => {
+    setAppIconBadge(unreadCount);
+  }, [unreadCount]);
 
   const renderItem = ({ item }) => {
     const type = TYPE_COLORS[item.type] || TYPE_COLORS.info;
