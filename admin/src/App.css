@@ -151,6 +151,30 @@
   padding: 4px 0;
 }
 
+.device-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.device-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #BFDBFE;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.device-group-code {
+  font-size: 10px;
+  font-weight: 500;
+  color: #93C5FD;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .sidebar .delete-btn {
   filter: grayscale(1) brightness(2);
   flex-shrink: 0;
@@ -414,6 +438,191 @@
 .receipt-empty {
   font-size: 12px;
   color: #64748B;
+}
+
+.code-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.code-label {
+  font-size: 12px;
+  color: #64748B;
+  margin-bottom: 4px;
+}
+
+.code-value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #1E3A5F;
+}
+
+.copy-btn,
+.ghost-btn {
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #1E3A5F;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghost-btn.danger {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #B91C1C;
+}
+
+.client-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.client-card {
+  background: white;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  border: 1px solid #E2E8F0;
+}
+
+.client-card.inactive {
+  opacity: 0.78;
+  background: #F8FAFC;
+}
+
+.client-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.client-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.client-badge {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.client-badge.on {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.client-badge.off {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.client-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #64748B;
+}
+
+.client-meta code {
+  background: #F1F5F9;
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #1E3A5F;
+  font-weight: 600;
+}
+
+.client-devices {
+  margin-top: 10px;
+  border-top: 1px solid #E2E8F0;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.client-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-name-dark {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.device-platform-tag {
+  font-weight: 500;
+  color: #64748B;
+}
+
+.device-prefs-dark {
+  font-size: 12px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.file-hint {
+  font-size: 13px;
+  color: #64748B;
+}
+
+.pdf-file-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdf-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1E293B;
+}
+
+.pdf-link {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E3A5F;
+  text-decoration: underline;
 }
 
 .sidebar-footer {

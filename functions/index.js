@@ -18,7 +18,14 @@ function isWebFcmToken(token) {
 function wantsChannel(data, channel) {
   const prefs = data?.prefs || {};
   if (channel === 'farmatic') return prefs.farmatic !== false;
+  if (channel === 'info') return prefs.info !== false;
   return prefs.alerts !== false;
+}
+
+function webLinkForChannel(channel) {
+  if (channel === 'farmatic') return 'https://taemsa-app.web.app/avisos/?tab=farmatic';
+  if (channel === 'info') return 'https://taemsa-app.web.app/avisos/?tab=info';
+  return 'https://taemsa-app.web.app/avisos/';
 }
 
 async function sendWebFcm({ title, body, type, notificationId, channel }) {
@@ -52,9 +59,7 @@ async function sendWebFcm({ title, body, type, notificationId, channel }) {
       },
       webpush: {
         fcmOptions: {
-          link: channel === 'farmatic'
-            ? 'https://taemsa-app.web.app/avisos/?tab=farmatic'
-            : 'https://taemsa-app.web.app/avisos/',
+          link: webLinkForChannel(channel),
         },
         headers: {
           Urgency: 'high',
@@ -96,5 +101,24 @@ exports.sendWebPushesOnFarmaticCreate = onDocumentCreated('farmaticUpdates/{upda
     type: 'farmatic',
     notificationId: event.params.updateId,
     channel: 'farmatic',
+  });
+});
+
+exports.sendWebPushesOnInfoCreate = onDocumentCreated('infoArticles/{articleId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  const data = snap.data() || {};
+  if (!data.notifyPush) {
+    console.log('Info article without notifyPush');
+    return;
+  }
+
+  await sendWebFcm({
+    title: data.title || 'Información TAEMSA',
+    body: data.body || 'Nueva información disponible',
+    type: 'info',
+    notificationId: event.params.articleId,
+    channel: 'info',
   });
 });

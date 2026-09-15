@@ -1,14 +1,17 @@
-export const DEFAULT_PREFS = { alerts: true, farmatic: true };
+export const DEFAULT_PREFS = { alerts: true, farmatic: true, info: true };
 
 export function normalizePrefs(prefs) {
   return {
     alerts: prefs?.alerts !== false,
     farmatic: prefs?.farmatic !== false,
+    info: prefs?.info !== false,
   };
 }
 
-/** channel: 'alerts' | 'farmatic' */
+/** channel: 'alerts' | 'farmatic' | 'info' */
 export function deviceWantsChannel(device, channel) {
   const prefs = normalizePrefs(device?.prefs);
-  return channel === 'farmatic' ? prefs.farmatic : prefs.alerts;
+  if (channel === 'farmatic') return prefs.farmatic;
+  if (channel === 'info') return prefs.info;
+  return prefs.alerts;
 }

@@ -1,12 +1,46 @@
 import { getToken, onMessage } from 'firebase/messaging';
 import { getFirebaseMessaging, VAPID_KEY } from './firebase';
 
+const AVISOS_SW_URL = '/avisos/firebase-messaging-sw.js';
+const AVISOS_SW_SCOPE = '/avisos/';
+
+function isStandalonePwa() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: minimal-ui)').matches
+    || window.navigator.standalone === true
+  );
+}
+
+/** Desregistra el SW de la raíz que asociaba el badge a Chrome. */
+async function retireRootMessagingWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map(async (reg) => {
+      const script = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '';
+      const isRootMessaging =
+        script.endsWith('/firebase-messaging-sw.js')
+        && !script.includes('/avisos/');
+      if (isRootMessaging) {
+        try {
+          if ('clearAppBadge' in navigator) await navigator.clearAppBadge();
+        } catch (_) {}
+        await reg.unregister();
+      }
+    }),
+  );
+}
+
 export async function registerMessagingServiceWorker() {
   if (!('serviceWorker' in navigator)) {
     throw new Error('Este navegador no soporta service workers.');
   }
-  return navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  await retireRootMessagingWorker();
+  return navigator.serviceWorker.register(AVISOS_SW_URL, { scope: AVISOS_SW_SCOPE });
 }
+
+export { isStandalonePwa };
 
 /** Si ya hay permiso, recupera el token sin volver a pedir confirmación. */
 export async function restoreWebPush() {
@@ -56,7 +90,7 @@ export async function enableWebPush() {
   });
 
   if (!token) {
-    throw new Error('No se pudo obtener el token push.');
+    throw new Error('No se pudieron activar las notificaciones.');
   }
 
   return token;

@@ -27,6 +27,17 @@ body {
   padding: calc(16px + env(safe-area-inset-top)) 20px 20px;
 }
 
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header-copy {
+  min-width: 0;
+}
+
 .header h1 {
   font-size: 26px;
   letter-spacing: 2px;
@@ -39,11 +50,54 @@ body {
   margin-top: 2px;
 }
 
-.status {
-  display: block;
+.icon-btn {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: #E0F2FE;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 8px;
+}
+
+.status {
   font-size: 12px;
   color: #BFDBFE;
+}
+
+.notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.notif-badge.on {
+  color: #86EFAC;
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.notif-badge.off {
+  color: #FCA5A5;
+  background: rgba(239, 68, 68, 0.16);
 }
 
 .unread-pill {
@@ -353,6 +407,24 @@ body {
   font-size: 11px;
   color: #94A3B8;
   text-align: right;
+}
+
+.timeline-card .pdf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.timeline-card .pdf-link {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E3A5F;
+  padding: 8px 10px;
+  background: #EFF6FF;
+  border-radius: 8px;
+  text-decoration: none;
 }
 
 .prefs h2 {

@@ -11,26 +11,28 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function onlyUpdatingReceipts() {
-      return request.resource.data.diff(resource.data)
-        .affectedKeys()
-        .hasOnly(['receipts']);
+    function activeClient(clientId) {
+      return clientId is string
+        && clientId.size() > 0
+        && clientId.size() <= 32
+        && exists(/databases/$(database)/documents/clients/$(clientId))
+        && get(/databases/$(database)/documents/clients/$(clientId)).data.active == true;
     }
 
     function validDeviceData() {
       let data = request.resource.data;
-      return data.keys().hasAll(['clientName', 'platform', 'uid'])
+      return data.keys().hasAll(['clientId', 'clientName', 'deviceName', 'platform', 'uid'])
+        && data.clientId is string
         && data.clientName is string
         && data.clientName.size() > 0
         && data.clientName.size() <= 80
+        && data.deviceName is string
+        && data.deviceName.size() > 0
+        && data.deviceName.size() <= 80
         && data.platform is string
         && data.uid is string
-        && data.uid == request.auth.uid;
-    }
-
-    function canClaimOrOwnDevice() {
-      return !('uid' in resource.data)
-        || resource.data.uid == request.auth.uid;
+        && data.uid == request.auth.uid
+        && activeClient(data.clientId);
     }
 
     // Lista de administradores: cada user puede leer su doc; escritura solo Console.
@@ -39,12 +41,38 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Avisos: requieren sesión (admin o app anónima).
+    // Clientes / licencias: el código es el ID del documento.
+    // Get con sesión si no existe (para devolver not-found) o si active;
+    // list/escritura solo admin (incluye lectura de inactivos).
+    match /clients/{clientId} {
+      allow list, create, update, delete: if isAdmin();
+      allow get: if isAdmin()
+        || (isSignedIn() && (resource == null || resource.data.active == true));
+    }
+
+    // Avisos: lectura con sesión; escritura solo admin.
+    // Los acuses van en subcolección /receipts (no en el documento padre).
     match /notifications/{notificationId} {
       allow read: if isSignedIn();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || (isSignedIn() && onlyUpdatingReceipts());
+      allow create, update, delete: if isAdmin();
+
+      match /receipts/{deviceId} {
+        // Lectura por uid (compatible con collectionGroup where uid == auth.uid).
+        // Escritura: dispositivo existente + cliente activo (no exige mismo uid en devices).
+        allow read: if isAdmin()
+          || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow create, update: if isAdmin()
+          || (isSignedIn()
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.clientName is string
+              && request.resource.data.clientName.size() > 0
+              && request.resource.data.clientName.size() <= 80
+              && exists(/databases/$(database)/documents/devices/$(deviceId))
+              && activeClient(
+                get(/databases/$(database)/documents/devices/$(deviceId)).data.clientId
+              ));
+        allow delete: if isAdmin();
+      }
     }
 
     // Actualizaciones Farmatic
@@ -53,13 +81,23 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Dispositivos: cada app solo escribe el suyo (uid); admin lista/borra.
+    // Información / normativas / guías
+    match /infoArticles/{articleId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Dispositivos: UUID local; create/update exigen client activo + uid actual.
+    // Se permite reclamar el mismo deviceId si el clientId no cambia (reinstalar /
+    // nueva sesión anónima en el mismo dispositivo).
     match /devices/{deviceId} {
       allow read, delete: if isAdmin();
       allow create: if isSignedIn() && validDeviceData();
       allow update: if isAdmin()
-        || (isSignedIn() && validDeviceData() && canClaimOrOwnDevice()
-            && request.resource.data.uid == request.auth.uid);
+        || (isSignedIn()
+            && validDeviceData()
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.clientId == resource.data.clientId);
     }
   }
 }

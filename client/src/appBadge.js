@@ -1,10 +1,22 @@
+import { isStandalonePwa } from './webPush';
+
 const BASE_TITLE = 'TAEMSA — Avisos';
 
-/** Bolita/número en el icono de la PWA (Chrome/Android, Edge, Safari instalado cuando lo soporte). */
+/**
+ * Bolita en el icono solo si la PWA está instalada (standalone).
+ * Si se llama desde una pestaña de Chrome, el badge acaba en el icono de Chrome.
+ */
 export async function setWebAppBadge(count) {
   const value = Math.max(0, Number(count) || 0);
 
   document.title = value > 0 ? `(${value}) ${BASE_TITLE}` : BASE_TITLE;
+
+  if (!isStandalonePwa()) {
+    try {
+      if ('clearAppBadge' in navigator) await navigator.clearAppBadge();
+    } catch (_) {}
+    return;
+  }
 
   try {
     if (value > 0 && 'setAppBadge' in navigator) {

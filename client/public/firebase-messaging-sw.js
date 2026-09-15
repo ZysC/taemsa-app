@@ -1,6 +1,4 @@
-// Legacy root SW (antes del scope /avisos/).
-// Ya no pone badge aquí: eso marcaba el icono de Chrome.
-// Solo reenvía notificaciones data-only; el SW de /avisos/ es el canónico.
+// FCM SW scoped to /avisos/ (PWA). Badge must apply to the installed app, not Chrome.
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
@@ -15,12 +13,29 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+async function bumpAppBadge() {
+  if (!('setAppBadge' in self.navigator)) return;
+  try {
+    const existing = await self.registration.getNotifications();
+    const count = Math.max(1, existing.length + 1);
+    await self.navigator.setAppBadge(count);
+  } catch (_) {
+    try {
+      await self.navigator.setAppBadge(1);
+    } catch (__) {}
+  }
+}
+
 messaging.onBackgroundMessage((payload) => {
-  if (payload.notification) return;
+  const badgePromise = bumpAppBadge();
+
+  if (payload.notification) {
+    return badgePromise;
+  }
 
   const title = payload.data?.title || 'TAEMSA';
   const body = payload.data?.body || '';
-  return self.registration.showNotification(title, {
+  const show = self.registration.showNotification(title, {
     body,
     icon: '/avisos/icon-192.png',
     badge: '/avisos/icon-192.png',
@@ -28,6 +43,8 @@ messaging.onBackgroundMessage((payload) => {
     renotify: true,
     data: payload.data || {},
   });
+
+  return Promise.all([show, badgePromise]);
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -44,13 +61,4 @@ self.addEventListener('notificationclick', (event) => {
       return undefined;
     }),
   );
-});
-
-// Quitar badge que hubiera quedado en Chrome por el SW antiguo.
-self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    try {
-      if ('clearAppBadge' in self.navigator) await self.navigator.clearAppBadge();
-    } catch (_) {}
-  })());
 });

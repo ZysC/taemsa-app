@@ -1,18 +1,30 @@
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, ensureAppAuth } from './firebase';
+import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { auth, db, ensureAppAuth } from './firebase';
 
-export async function markNotificationDelivered({ notificationId, deviceId, clientName }) {
+export async function markNotificationDelivered({ notificationId, deviceId, clientName, deviceName }) {
   await ensureAppAuth();
-  await updateDoc(doc(db, 'notifications', notificationId), {
-    [`receipts.${deviceId}.clientName`]: clientName,
-    [`receipts.${deviceId}.deliveredAt`]: serverTimestamp(),
-  });
+  await setDoc(
+    doc(db, 'notifications', notificationId, 'receipts', deviceId),
+    {
+      clientName,
+      deviceName: deviceName || '',
+      uid: auth.currentUser.uid,
+      deliveredAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
-export async function markNotificationRead({ notificationId, deviceId, clientName }) {
+export async function markNotificationRead({ notificationId, deviceId, clientName, deviceName }) {
   await ensureAppAuth();
-  await updateDoc(doc(db, 'notifications', notificationId), {
-    [`receipts.${deviceId}.clientName`]: clientName,
-    [`receipts.${deviceId}.readAt`]: serverTimestamp(),
-  });
+  await setDoc(
+    doc(db, 'notifications', notificationId, 'receipts', deviceId),
+    {
+      clientName,
+      deviceName: deviceName || '',
+      uid: auth.currentUser.uid,
+      readAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
 }
