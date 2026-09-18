@@ -49,6 +49,12 @@ try {
 export { auth };
 export const db = getFirestore(app);
 
+/**
+ * App Check nativo (Play Integrity) no está disponible con el Firebase JS SDK en Expo.
+ * En web (panel + /avisos) sí usamos App Check con reCAPTCHA Enterprise.
+ * Para Android nativo haría falta @react-native-firebase/app-check + nuevo build.
+ */
+
 let authReady = null;
 
 /** Garantiza sesión anónima (reutiliza uid guardado si el SDK no persiste). */

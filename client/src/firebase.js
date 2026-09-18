@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getMessaging, isSupported } from 'firebase/messaging';
@@ -16,6 +17,22 @@ const firebaseConfig = {
 export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 
 const app = initializeApp(firebaseConfig);
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
+
+if (appCheckSiteKey) {
+  if (import.meta.env.DEV) {
+    const debug = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = debug === undefined || debug === '' ? true : debug;
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+} else if (import.meta.env.DEV) {
+  console.warn('[TAEMSA] Falta VITE_FIREBASE_APPCHECK_SITE_KEY — App Check no activo');
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
