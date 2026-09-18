@@ -3,7 +3,7 @@
     "name": "TAEMSA",
     "slug": "mobile",
     "scheme": "taemsa",
-    "version": "1.2.2",
+    "version": "1.2.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
       [
         "expo-notifications",
         {
-          "color": "#1E3A5F",
+          "color": "#1B6FE8",
           "defaultChannel": "default"
         }
       ]
@@ -27,10 +27,10 @@
     },
     "android": {
       "package": "com.taemsa.app",
-      "versionCode": 5,
+      "versionCode": 8,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#1E3A5F",
+        "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

@@ -17,6 +17,7 @@ import {
 } from './clientApi';
 import { enableWebPush, restoreWebPush, listenForegroundMessages } from './webPush';
 import { setWebAppBadge } from './appBadge';
+import taemsaLogo from './assets/taemsa-logo.png';
 import './App.css';
 
 const TYPE_COLORS = {
@@ -25,6 +26,12 @@ const TYPE_COLORS = {
   novedad:  { bg: '#D1FAE5', border: '#10B981', icon: '🟢' },
   info:     { bg: '#F3F4F6', border: '#6B7280', icon: 'ℹ️' },
 };
+
+function isNotificationForClient(notification, clientId) {
+  const targets = notification?.targetClientIds;
+  if (!Array.isArray(targets) || targets.length === 0) return true;
+  return !!clientId && targets.includes(clientId);
+}
 
 export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
@@ -53,6 +60,17 @@ export default function App() {
   const [myReceipts, setMyReceipts] = useState({});
   const deliveredIds = useRef(new Set());
   const tokenRef = useRef(null);
+  const forceCreateRef = useRef(false);
+
+  const resetLocalSession = (message) => {
+    clearSession();
+    setClientId('');
+    setClientName('');
+    setDeviceId('');
+    setDeviceName('');
+    setPushReady(false);
+    setCodeError(message || 'Este dispositivo fue dado de baja. Vuelve a introducir el código.');
+  };
 
   useEffect(() => {
     const loadedPrefs = loadPrefs();
@@ -103,6 +121,8 @@ export default function App() {
 
         if (existingToken) {
           tokenRef.current = existingToken;
+          const allowCreate = forceCreateRef.current;
+          forceCreateRef.current = false;
           const id = await registerDevice({
             clientId,
             clientName,
@@ -110,6 +130,7 @@ export default function App() {
             deviceName,
             token: existingToken,
             prefs,
+            forceCreate: allowCreate,
           });
           if (!cancelled) {
             setDeviceId(id);
@@ -117,6 +138,8 @@ export default function App() {
             setDeviceStatus(`${clientName} · ${deviceName}`);
           }
         } else {
+          const allowCreate = forceCreateRef.current;
+          forceCreateRef.current = false;
           const id = await registerDevice({
             clientId,
             clientName,
@@ -124,6 +147,7 @@ export default function App() {
             deviceName,
             token: null,
             prefs,
+            forceCreate: allowCreate,
           });
           if (!cancelled) {
             setDeviceId(id);
@@ -134,13 +158,10 @@ export default function App() {
       } catch (err) {
         if (!cancelled) {
           const msg = err?.message || 'desconocido';
-          // No borrar sesión por errores de permiso/red al sincronizar dispositivo.
-          if (/no válido|desactiv/i.test(msg) && !/permission|insufficient/i.test(msg)) {
-            clearSession();
-            setClientId('');
-            setClientName('');
-            setDeviceId('');
-            setCodeError('Código inválido o desactivado. Introduce uno nuevo.');
+          if (err?.code === 'device-revoked' || /dado de baja/i.test(msg)) {
+            resetLocalSession(msg);
+          } else if (/no válido|desactiv/i.test(msg) && !/permission|insufficient/i.test(msg)) {
+            resetLocalSession('Código inválido o desactivado. Introduce uno nuevo.');
           } else {
             setDeviceStatus(
               /permission|insufficient/i.test(msg)
@@ -154,7 +175,11 @@ export default function App() {
       unsub = onSnapshot(
         query(collection(db, 'notifications'), orderBy('createdAt', 'desc')),
         (snap) => {
-          setNotifications(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          setNotifications(
+            snap.docs
+              .map((d) => ({ id: d.id, ...d.data() }))
+              .filter((n) => isNotificationForClient(n, clientId)),
+          );
           setLoading(false);
         },
         (err) => {
@@ -253,6 +278,7 @@ export default function App() {
         codeInput,
         deviceNameInput,
       );
+      forceCreateRef.current = true;
       setClientId(client.id);
       setClientName(client.name);
       setDeviceId(id);
@@ -273,6 +299,7 @@ export default function App() {
     setCodeError('');
     try {
       const name = await saveDeviceNameOnly(deviceNameInput);
+      forceCreateRef.current = true;
       setDeviceName(name);
       setDeviceNameInput('');
     } catch (err) {
@@ -300,8 +327,12 @@ export default function App() {
       setPushReady(true);
       setDeviceStatus(`${clientName} · ${deviceName}`);
     } catch (err) {
-      setPushError(err?.message || 'No se pudieron activar las notificaciones');
-      setDeviceStatus(`${clientName} · ${deviceName}`);
+      if (err?.code === 'device-revoked') {
+        resetLocalSession(err.message);
+      } else {
+        setPushError(err?.message || 'No se pudieron activar las notificaciones');
+        setDeviceStatus(`${clientName} · ${deviceName}`);
+      }
     } finally {
       setEnablingPush(false);
     }
@@ -323,7 +354,11 @@ export default function App() {
         prefs: next,
       });
     } catch (err) {
-      console.error(err);
+      if (err?.code === 'device-revoked') {
+        resetLocalSession(err.message);
+      } else {
+        console.error(err);
+      }
     } finally {
       setSavingPrefs(false);
     }
@@ -372,7 +407,7 @@ export default function App() {
     return (
       <div className="app">
         <header className="header">
-          <h1>TAEMSA</h1>
+          <img className="header-logo" src={taemsaLogo} alt="TAEMSA" />
           <p>Acceso de cliente</p>
         </header>
         <form className="register" onSubmit={handleRedeemCode}>
@@ -413,7 +448,7 @@ export default function App() {
     return (
       <div className="app">
         <header className="header">
-          <h1>TAEMSA</h1>
+          <img className="header-logo" src={taemsaLogo} alt="TAEMSA" />
           <p>{clientName}</p>
         </header>
         <form className="register" onSubmit={handleSaveDeviceName}>
@@ -442,7 +477,7 @@ export default function App() {
       <header className="header">
         <div className="header-top">
           <div className="header-copy">
-            <h1>TAEMSA</h1>
+            <img className="header-logo" src={taemsaLogo} alt="TAEMSA" />
             <p>{tab === 'prefs' ? 'Preferencias' : 'Soporte Farmatic'}</p>
           </div>
           {tab === 'prefs' ? (

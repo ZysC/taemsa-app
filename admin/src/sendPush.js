@@ -5,13 +5,6 @@ import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage
 import { db, storage } from './firebase';
 import { deviceWantsChannel } from './prefs';
 
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_BATCH_SIZE = 100;
-
-function isExpoPushToken(token) {
-  return typeof token === 'string' && token.startsWith('ExponentPushToken[');
-}
-
 function safeFileName(name) {
   return String(name || 'documento.pdf')
     .replace(/[^\w.\-()\sÀ-ÿ]/g, '_')
@@ -38,15 +31,33 @@ async function loadDevices() {
     .filter((d) => d.clientId && activeIds.has(d.clientId));
 }
 
+function normalizeTargetClientIds(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const ids = [...new Set(raw.map((id) => String(id || '').trim()).filter(Boolean))];
+  return ids.length > 0 ? ids : null;
+}
+
 export async function createNotificationWithReceipts(form) {
   const devices = await loadDevices();
-  const targets = devices.filter((d) => deviceWantsChannel(d, 'alerts'));
+  const targetClientIds = normalizeTargetClientIds(form.targetClientIds);
+  const targets = devices.filter((d) => {
+    if (!deviceWantsChannel(d, 'alerts')) return false;
+    if (targetClientIds && !targetClientIds.includes(d.clientId)) return false;
+    return true;
+  });
 
-  const docRef = await addDoc(collection(db, 'notifications'), {
-    ...form,
+  const payload = {
+    title: form.title,
+    body: form.body,
+    type: form.type || 'info',
     channel: 'alerts',
     createdAt: serverTimestamp(),
-  });
+  };
+  if (targetClientIds) {
+    payload.targetClientIds = targetClientIds;
+  }
+
+  const docRef = await addDoc(collection(db, 'notifications'), payload);
 
   const batch = writeBatch(db);
   targets.forEach((d) => {
@@ -64,7 +75,7 @@ export async function createNotificationWithReceipts(form) {
     await batch.commit();
   }
 
-  return { id: docRef.id, devices };
+  return { id: docRef.id, devices: targets, targetClientIds };
 }
 
 export async function createFarmaticUpdate(form) {
@@ -160,51 +171,3 @@ export async function loadNotificationReceipts(notificationId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-async function postExpoBatch(messages) {
-  const res = await fetch(EXPO_PUSH_URL, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(messages),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Expo Push HTTP ${res.status}`);
-  }
-}
-
-export async function sendExpoPushes({
-  title,
-  body,
-  type,
-  notificationId,
-  devices,
-  channel = 'alerts',
-}) {
-  const list = devices ?? (await loadDevices());
-
-  const messages = list
-    .filter((d) => isExpoPushToken(d.token) && deviceWantsChannel(d, channel))
-    .map((d) => ({
-      to: d.token,
-      sound: 'default',
-      title,
-      body,
-      badge: 1,
-      data: { type: type || channel, notificationId: notificationId || '', channel },
-      channelId: 'default',
-    }));
-
-  if (messages.length === 0) {
-    return { sent: 0, skipped: list.length };
-  }
-
-  for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
-    await postExpoBatch(messages.slice(i, i + EXPO_BATCH_SIZE));
-  }
-
-  return { sent: messages.length, skipped: list.length - messages.length };
-}

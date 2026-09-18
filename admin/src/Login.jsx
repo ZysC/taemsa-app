@@ -32,7 +32,7 @@ export default function Login() {
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="login-brand">
-          <span className="login-logo">TAEMSA</span>
+          <img className="login-logo-img" src="/taemsa-logo.png" alt="TAEMSA" />
           <span className="login-sub">Acceso al panel</span>
         </div>
 

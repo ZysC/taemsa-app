@@ -5,8 +5,8 @@
   "start_url": "/avisos/",
   "scope": "/avisos/",
   "display": "standalone",
-  "background_color": "#1E3A5F",
-  "theme_color": "#1E3A5F",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
   "lang": "es",
   "icons": [
     {

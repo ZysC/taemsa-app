@@ -13,7 +13,6 @@ import {
   deleteInfoArticle,
   deleteNotificationWithReceipts,
   loadNotificationReceipts,
-  sendExpoPushes,
 } from './sendPush';
 import {
   clientDeviceStats,
@@ -74,6 +73,9 @@ function formatLastSeen(ms) {
 function AdminPanel({ user }) {
   const [section, setSection] = useState('avisos');
   const [form, setForm] = useState({ title: '', body: '', type: 'info' });
+  const [targetAll, setTargetAll] = useState(true);
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
+  const [clientFilter, setClientFilter] = useState('');
   const [farmaticForm, setFarmaticForm] = useState({
     version: '', title: '', body: '', notifyPush: true,
   });
@@ -151,28 +153,45 @@ function AdminPanel({ user }) {
     return map;
   }, [deviceList]);
 
+  const activeClients = useMemo(
+    () => clients.filter((c) => c.active === true),
+    [clients],
+  );
+
+  const filteredTargetClients = useMemo(() => {
+    const q = clientFilter.trim().toLowerCase();
+    if (!q) return activeClients;
+    return activeClients.filter((c) => {
+      const name = (c.name || '').toLowerCase();
+      const id = (c.id || '').toLowerCase();
+      return name.includes(q) || id.includes(q);
+    });
+  }, [activeClients, clientFilter]);
+
+  const toggleClientTarget = (clientId) => {
+    setSelectedClientIds((prev) => (
+      prev.includes(clientId)
+        ? prev.filter((id) => id !== clientId)
+        : [...prev, clientId]
+    ));
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.body.trim()) return;
+    if (!targetAll && selectedClientIds.length === 0) {
+      alert('Selecciona al menos un cliente, o elige “Todos los activos”.');
+      return;
+    }
     setSending(true);
     try {
-      const created = await createNotificationWithReceipts(form);
-      let pushResult = { sent: 0 };
-      try {
-        pushResult = await sendExpoPushes({
-          ...form,
-          notificationId: created.id,
-          devices: created.devices,
-          channel: 'alerts',
-        });
-      } catch (pushErr) {
-        console.error(pushErr);
-      }
+      const targetClientIds = targetAll ? null : selectedClientIds;
+      await createNotificationWithReceipts({ ...form, targetClientIds });
       setForm({ title: '', body: '', type: 'info' });
       setSuccess(
-        pushResult.sent > 0
-          ? `Enviado a ${pushResult.sent} dispositivo(s) con avisos activados.`
-          : 'Publicado en el listado. Ningún dispositivo con avisos + token push.',
+        targetAll
+          ? 'Publicado para todos los clientes activos. El push se envía desde el servidor.'
+          : `Publicado para ${selectedClientIds.length} cliente(s). El push se envía desde el servidor.`,
       );
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
@@ -187,27 +206,12 @@ function AdminPanel({ user }) {
     if (!farmaticForm.title.trim() || !farmaticForm.body.trim()) return;
     setFarmaticSending(true);
     try {
-      const created = await createFarmaticUpdate(farmaticForm);
-      let pushResult = { sent: 0 };
-      if (farmaticForm.notifyPush) {
-        try {
-          pushResult = await sendExpoPushes({
-            title: farmaticForm.title,
-            body: farmaticForm.body,
-            type: 'farmatic',
-            notificationId: created.id,
-            channel: 'farmatic',
-          });
-        } catch (pushErr) {
-          console.error(pushErr);
-        }
-      }
+      const willNotify = !!farmaticForm.notifyPush;
+      await createFarmaticUpdate(farmaticForm);
       setFarmaticForm({ version: '', title: '', body: '', notifyPush: true });
       setFarmaticSuccess(
-        farmaticForm.notifyPush
-          ? (pushResult.sent > 0
-            ? `Publicada y avisados ${pushResult.sent} dispositivo(s).`
-            : 'Publicada en el historial. Ningún dispositivo con Farmatic + token push.')
+        willNotify
+          ? 'Publicada. El push se envía automáticamente desde el servidor.'
           : 'Publicada en el historial (sin push).',
       );
       setTimeout(() => setFarmaticSuccess(''), 4000);
@@ -257,27 +261,12 @@ function AdminPanel({ user }) {
     if (!infoForm.title.trim() || !infoForm.body.trim()) return;
     setInfoSending(true);
     try {
-      const created = await createInfoArticle(infoForm, infoForm.pdfFiles);
-      let pushResult = { sent: 0 };
-      if (infoForm.notifyPush) {
-        try {
-          pushResult = await sendExpoPushes({
-            title: infoForm.title,
-            body: infoForm.body,
-            type: 'info',
-            notificationId: created.id,
-            channel: 'info',
-          });
-        } catch (pushErr) {
-          console.error(pushErr);
-        }
-      }
+      const willNotify = !!infoForm.notifyPush;
+      await createInfoArticle(infoForm, infoForm.pdfFiles);
       setInfoForm({ title: '', body: '', notifyPush: true, pdfFiles: [] });
       setInfoSuccess(
-        infoForm.notifyPush
-          ? (pushResult.sent > 0
-            ? `Publicada y avisados ${pushResult.sent} dispositivo(s).`
-            : 'Publicada. Ningún dispositivo con Información + token push.')
+        willNotify
+          ? 'Publicada. El push se envía automáticamente desde el servidor.'
           : 'Publicada (sin push).',
       );
       setTimeout(() => setInfoSuccess(''), 4000);
@@ -355,7 +344,7 @@ function AdminPanel({ user }) {
     <div className="app">
       <aside className="sidebar">
         <div className="logo">
-          <span className="logo-text">TAEMSA</span>
+          <img className="logo-img" src="/taemsa-logo.png" alt="TAEMSA" />
           <span className="logo-sub">Panel de soporte</span>
         </div>
 
@@ -527,8 +516,89 @@ function AdminPanel({ user }) {
                 />
               </div>
 
+              <div className="form-group">
+                <label>Destinatarios</label>
+                <div className="type-buttons">
+                  <button
+                    type="button"
+                    className={`type-btn ${targetAll ? 'active' : ''}`}
+                    style={targetAll ? { borderColor: '#1B6FE8', color: '#1B6FE8' } : {}}
+                    onClick={() => setTargetAll(true)}
+                  >
+                    Todos los activos ({activeClients.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`type-btn ${!targetAll ? 'active' : ''}`}
+                    style={!targetAll ? { borderColor: '#1B6FE8', color: '#1B6FE8' } : {}}
+                    onClick={() => {
+                      setTargetAll(false);
+                    }}
+                  >
+                    Solo seleccionados
+                  </button>
+                </div>
+
+                {!targetAll && (
+                  <div className="target-picker">
+                    <div className="target-toolbar">
+                      <input
+                        type="search"
+                        placeholder="Buscar cliente o código…"
+                        value={clientFilter}
+                        onChange={(e) => setClientFilter(e.target.value)}
+                        aria-label="Buscar cliente"
+                      />
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => setSelectedClientIds(activeClients.map((c) => c.id))}
+                      >
+                        Marcar todos
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => setSelectedClientIds([])}
+                      >
+                        Ninguno
+                      </button>
+                    </div>
+                    <div className="target-count">
+                      {selectedClientIds.length} de {activeClients.length} seleccionados
+                    </div>
+                    {activeClients.length === 0 ? (
+                      <div className="target-empty">No hay clientes activos.</div>
+                    ) : filteredTargetClients.length === 0 ? (
+                      <div className="target-empty">Ningún cliente coincide con la búsqueda.</div>
+                    ) : (
+                      <div className="target-list">
+                        {filteredTargetClients.map((c) => {
+                          const checked = selectedClientIds.includes(c.id);
+                          return (
+                            <label key={c.id} className={`target-row ${checked ? 'on' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleClientTarget(c.id)}
+                              />
+                              <span className="target-name">{c.name || c.id}</span>
+                              <code className="target-code">{c.id}</code>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <button type="submit" className="send-btn" disabled={sending}>
-                {sending ? 'Enviando...' : 'Enviar aviso'}
+                {sending
+                  ? 'Enviando...'
+                  : targetAll
+                    ? 'Enviar aviso a todos'
+                    : `Enviar aviso (${selectedClientIds.length})`}
               </button>
 
               {success && <div className="success-msg">{success}</div>}
@@ -560,6 +630,11 @@ function AdminPanel({ user }) {
                         <strong>{n.title}</strong>
                         <span className="notif-badge" style={{ backgroundColor: s.badge }}>
                           {n.type}
+                        </span>
+                        <span className="notif-targets">
+                          {Array.isArray(n.targetClientIds) && n.targetClientIds.length > 0
+                            ? `${n.targetClientIds.length} cliente(s)`
+                            : 'Todos'}
                         </span>
                         <button className="delete-btn" onClick={() => handleDelete(n.id)} title="Eliminar">
                           🗑️
@@ -1022,7 +1097,7 @@ export default function App() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-brand">
-            <span className="login-logo">TAEMSA</span>
+            <img className="login-logo-img" src="/taemsa-logo.png" alt="TAEMSA" />
             <span className="login-sub">Sin permiso de administrador</span>
           </div>
           <p className="login-error">

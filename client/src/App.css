@@ -4,6 +4,15 @@
   padding: 0;
 }
 
+:root {
+  --brand-black: #0A0A0A;
+  --brand-blue: #1B6FE8;
+  --brand-indigo: #4B45D4;
+  --brand-coral: #F07848;
+  --brand-blue-soft: #8AB4F8;
+  --brand-gradient: linear-gradient(90deg, #1B6FE8 0%, #4B45D4 55%, #F07848 100%);
+}
+
 html, body, #root {
   min-height: 100%;
 }
@@ -22,7 +31,7 @@ body {
 }
 
 .header {
-  background: #1E3A5F;
+  background: var(--brand-black);
   color: white;
   padding: calc(16px + env(safe-area-inset-top)) 20px 20px;
 }
@@ -38,6 +47,13 @@ body {
   min-width: 0;
 }
 
+.header-logo {
+  width: min(200px, 70vw);
+  height: auto;
+  display: block;
+  margin-bottom: 6px;
+}
+
 .header h1 {
   font-size: 26px;
   letter-spacing: 2px;
@@ -45,7 +61,7 @@ body {
 }
 
 .header p {
-  color: #93C5FD;
+  color: var(--brand-blue-soft);
   font-size: 14px;
   margin-top: 2px;
 }
@@ -77,7 +93,7 @@ body {
 
 .status {
   font-size: 12px;
-  color: #BFDBFE;
+  color: #A5C4FC;
 }
 
 .notif-badge {
@@ -164,7 +180,7 @@ body {
 }
 
 .register button {
-  background: #1E3A5F;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-indigo));
   color: white;
   border: none;
   border-radius: 10px;
@@ -244,7 +260,7 @@ body {
 }
 
 .badge {
-  background: #1E3A5F;
+  background: var(--brand-coral);
   color: white;
   font-size: 11px;
   font-weight: 700;
@@ -260,13 +276,13 @@ body {
 }
 
 .tap-hint {
-  color: #1E3A5F;
+  color: var(--brand-blue);
   font-weight: 600;
 }
 
 .push-box {
   background: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  border: 1px solid #A5C4FC;
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 16px;
@@ -282,7 +298,7 @@ body {
 }
 
 .push-box button {
-  background: #1E3A5F;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-indigo));
   color: white;
   border: none;
   border-radius: 10px;
@@ -305,7 +321,7 @@ body {
 }
 
 .toast {
-  background: #1E3A5F;
+  background: var(--brand-black);
   color: white;
   border-radius: 10px;
   padding: 12px 14px;
@@ -332,8 +348,8 @@ body {
 }
 
 .tabs button.active {
-  color: #1E3A5F;
-  border-bottom-color: #1E3A5F;
+  color: var(--brand-blue);
+  border-bottom-color: var(--brand-blue);
 }
 
 .timeline {
@@ -357,15 +373,15 @@ body {
   top: 12px;
   bottom: 0;
   width: 2px;
-  background: #BFDBFE;
+  background: #A5C4FC;
 }
 
 .timeline-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #1E3A5F;
-  border: 2px solid #93C5FD;
+  background: var(--brand-blue);
+  border: 2px solid #8AB4F8;
   margin-top: 6px;
 }
 
@@ -379,7 +395,7 @@ body {
 .timeline-card .version {
   display: inline-block;
   background: #DBEAFE;
-  color: #1E3A5F;
+  color: var(--brand-indigo);
   font-size: 11px;
   font-weight: 700;
   border-radius: 999px;
@@ -420,7 +436,7 @@ body {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #1E3A5F;
+  color: var(--brand-blue);
   padding: 8px 10px;
   background: #EFF6FF;
   border-radius: 8px;

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, ensureAppAuth } from './firebase';
 import { normalizePrefs } from './prefs';
 import {
@@ -100,6 +100,7 @@ export async function registerDevice({
   deviceId,
   deviceName,
   prefs,
+  forceCreate = false,
 } = {}) {
   await ensureAppAuth();
   const session = await loadSession();
@@ -119,7 +120,6 @@ export async function registerDevice({
     platform: Platform.OS,
     uid: auth.currentUser.uid,
     lastSeenAt: serverTimestamp(),
-    registeredAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
@@ -131,16 +131,35 @@ export async function registerDevice({
     payload.prefs = normalizePrefs(prefs);
   }
 
-  await setDoc(doc(db, 'devices', id), payload, { merge: true });
+  const ref = doc(db, 'devices', id);
+
+  if (forceCreate) {
+    await setDoc(ref, {
+      ...payload,
+      registeredAt: serverTimestamp(),
+    }, { merge: true });
+    return id;
+  }
+
+  try {
+    await updateDoc(ref, payload);
+  } catch (err) {
+    if (err?.code === 'not-found') {
+      await clearSession();
+      const revoked = new Error('Este dispositivo fue dado de baja. Vuelve a introducir el código.');
+      revoked.code = 'device-revoked';
+      throw revoked;
+    }
+    throw err;
+  }
   return id;
 }
 
 export async function updateDevicePrefs(deviceId, prefs, session = null) {
   await ensureAppAuth();
   const s = session || await loadSession();
-  await setDoc(
-    doc(db, 'devices', deviceId),
-    {
+  try {
+    await updateDoc(doc(db, 'devices', deviceId), {
       prefs: normalizePrefs(prefs),
       clientId: s.clientId,
       clientName: s.clientName,
@@ -149,7 +168,14 @@ export async function updateDevicePrefs(deviceId, prefs, session = null) {
       uid: auth.currentUser.uid,
       lastSeenAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+    });
+  } catch (err) {
+    if (err?.code === 'not-found') {
+      await clearSession();
+      const revoked = new Error('Este dispositivo fue dado de baja. Vuelve a introducir el código.');
+      revoked.code = 'device-revoked';
+      throw revoked;
+    }
+    throw err;
+  }
 }

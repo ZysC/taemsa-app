@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet, Text, View, FlatList, TextInput, Pressable, Switch,
+  StyleSheet, Text, View, FlatList, TextInput, Pressable, Switch, Image,
   Platform, StatusBar, ActivityIndicator, RefreshControl, KeyboardAvoidingView, Linking,
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -19,8 +19,18 @@ import { markNotificationDelivered, markNotificationRead } from './receipts';
 import { DEFAULT_PREFS } from './prefs';
 import { loadPrefs, savePrefs } from './prefsStorage';
 import { setAppIconBadge } from './badge';
+import { clearSession } from './clientSession';
 
 const canUsePush = Constants.executionEnvironment !== 'storeClient';
+const logoSource = require('./assets/taemsa-logo.png');
+
+const BRAND = {
+  black: '#0A0A0A',
+  blue: '#1B6FE8',
+  indigo: '#4B45D4',
+  coral: '#F07848',
+  soft: '#8AB4F8',
+};
 
 const TYPE_COLORS = {
   error:         { bg: '#FEE2E2', border: '#EF4444', icon: '🔴' },
@@ -28,6 +38,12 @@ const TYPE_COLORS = {
   novedad:       { bg: '#D1FAE5', border: '#10B981', icon: '🟢' },
   info:          { bg: '#F3F4F6', border: '#6B7280', icon: 'ℹ️' },
 };
+
+function isNotificationForClient(notification, clientId) {
+  const targets = notification?.targetClientIds;
+  if (!Array.isArray(targets) || targets.length === 0) return true;
+  return !!clientId && targets.includes(clientId);
+}
 
 export default function App() {
   const [notifications, setNotifications] = useState([]);
@@ -55,6 +71,17 @@ export default function App() {
   const unsubscribePush = useRef(() => {});
   const deliveredIds = useRef(new Set());
   const tokenRef = useRef(null);
+  const forceCreateRef = useRef(false);
+
+  const resetLocalSession = async (message) => {
+    await clearSession();
+    setClientId('');
+    setClientName('');
+    setDeviceId('');
+    setDeviceName('');
+    setPushReady(false);
+    setCodeError(message || 'Este dispositivo fue dado de baja. Vuelve a introducir el código.');
+  };
 
   useEffect(() => {
     Promise.all([ensureActiveSession(), loadPrefs()])
@@ -82,6 +109,8 @@ export default function App() {
 
     const afterRegister = async (token, expoGo) => {
       tokenRef.current = token;
+      const allowCreate = forceCreateRef.current;
+      forceCreateRef.current = false;
       const id = await registerDevice({
         token,
         expoGo,
@@ -90,6 +119,7 @@ export default function App() {
         deviceId,
         deviceName,
         prefs,
+        forceCreate: allowCreate,
       });
       if (!cancelled) {
         setDeviceId(id);
@@ -100,11 +130,13 @@ export default function App() {
 
     const failRegister = async (err) => {
       const msg = err?.message ?? 'desconocido';
-      // No borrar la sesión local por fallos de registro/permiso: el cliente
-      // ya validó el código; forzar re-login al reabrir era el bug de la APK.
       if (!cancelled) {
+        if (err?.code === 'device-revoked' || /dado de baja/i.test(msg)) {
+          await resetLocalSession(msg);
+          return;
+        }
         setDeviceStatus(
-          /permission|insufficient|no válido|desactiv/i.test(msg)
+          /permission|insufficient/i.test(msg)
             ? 'No se pudo sincronizar el dispositivo. Reabre la app o contacta con TAEMSA.'
             : 'Error al registrar: ' + msg,
         );
@@ -149,7 +181,11 @@ export default function App() {
       unsubNotif = onSnapshot(
         query(collection(db, 'notifications'), orderBy('createdAt', 'desc')),
         (snapshot) => {
-          setNotifications(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+          setNotifications(
+            snapshot.docs
+              .map((d) => ({ id: d.id, ...d.data() }))
+              .filter((n) => isNotificationForClient(n, clientId)),
+          );
           setLoading(false);
           setRefreshing(false);
         },
@@ -242,6 +278,7 @@ export default function App() {
         code,
         deviceNameInput,
       );
+      forceCreateRef.current = true;
       setClientId(client.id);
       setClientName(client.name);
       setDeviceId(id);
@@ -261,6 +298,7 @@ export default function App() {
     setCodeError('');
     try {
       const name = await saveDeviceNameOnly(deviceNameInput);
+      forceCreateRef.current = true;
       setDeviceName(name);
       setDeviceNameInput('');
     } catch (err) {
@@ -290,7 +328,11 @@ export default function App() {
         prefs: next,
       });
     } catch (err) {
-      console.log('No se pudieron guardar preferencias:', err?.message ?? err);
+      if (err?.code === 'device-revoked') {
+        await resetLocalSession(err.message);
+      } else {
+        console.log('No se pudieron guardar preferencias:', err?.message ?? err);
+      }
     } finally {
       setSavingPrefs(false);
     }
@@ -406,8 +448,8 @@ export default function App() {
   if (checkingSession) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
-        <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 80 }} />
+        <StatusBar barStyle="light-content" backgroundColor={BRAND.black} />
+        <ActivityIndicator size="large" color={BRAND.blue} style={{ marginTop: 80 }} />
       </View>
     );
   }
@@ -418,9 +460,9 @@ export default function App() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+        <StatusBar barStyle="light-content" backgroundColor={BRAND.black} />
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>TAEMSA</Text>
+          <Image source={logoSource} style={styles.headerLogo} resizeMode="contain" />
           <Text style={styles.headerSubtitle}>Acceso de cliente</Text>
         </View>
         <View style={styles.registerBox}>
@@ -473,9 +515,9 @@ export default function App() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+        <StatusBar barStyle="light-content" backgroundColor={BRAND.black} />
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>TAEMSA</Text>
+          <Image source={logoSource} style={styles.headerLogo} resizeMode="contain" />
           <Text style={styles.headerSubtitle}>{clientName}</Text>
         </View>
         <View style={styles.registerBox}>
@@ -510,12 +552,12 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+      <StatusBar barStyle="light-content" backgroundColor={BRAND.black} />
 
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>TAEMSA</Text>
+            <Image source={logoSource} style={styles.headerLogo} resizeMode="contain" />
             <Text style={styles.headerSubtitle}>
               {tab === 'prefs' ? 'Preferencias' : 'Soporte Farmatic'}
             </Text>
@@ -582,7 +624,7 @@ export default function App() {
             <Text style={styles.emptySubText}>Actívalos en Preferencias si quieres recibirlos</Text>
           </View>
         ) : loading ? (
-          <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={BRAND.blue} style={{ marginTop: 40 }} />
         ) : notifications.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🔔</Text>
@@ -596,7 +638,7 @@ export default function App() {
             renderItem={renderItem}
             contentContainerStyle={styles.list}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1E3A5F']} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BRAND.blue]} />
             }
           />
         )
@@ -609,7 +651,7 @@ export default function App() {
             <Text style={styles.emptySubText}>Actívalas en Preferencias si quieres verlas</Text>
           </View>
         ) : farmaticLoading ? (
-          <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={BRAND.blue} style={{ marginTop: 40 }} />
         ) : farmaticUpdates.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>📋</Text>
@@ -633,7 +675,7 @@ export default function App() {
             <Text style={styles.emptySubText}>Actívala en Preferencias si quieres verla</Text>
           </View>
         ) : infoLoading ? (
-          <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={BRAND.blue} style={{ marginTop: 40 }} />
         ) : infoArticles.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>📄</Text>
@@ -704,7 +746,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: BRAND.black,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 16 : 60,
     paddingBottom: 16,
     paddingHorizontal: 20,
@@ -718,6 +760,11 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
   },
+  headerLogo: {
+    width: 180,
+    height: 48,
+    marginBottom: 4,
+  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 26,
@@ -725,7 +772,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   headerSubtitle: {
-    color: '#93C5FD',
+    color: BRAND.soft,
     fontSize: 14,
     marginTop: 2,
   },
@@ -786,7 +833,7 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: '#1E3A5F',
+    borderBottomColor: BRAND.blue,
   },
   tabText: {
     fontSize: 13,
@@ -794,7 +841,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#1E3A5F',
+    color: BRAND.blue,
   },
   registerBox: {
     padding: 24,
@@ -823,7 +870,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   registerBtn: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: BRAND.blue,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -919,11 +966,11 @@ const styles = StyleSheet.create({
   },
   cardHintUnread: {
     fontSize: 11,
-    color: '#1E3A5F',
+    color: BRAND.blue,
     fontWeight: '600',
   },
   unreadBadge: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: BRAND.coral,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -944,12 +991,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#1E3A5F',
+    borderLeftColor: BRAND.blue,
   },
   farmaticVersion: {
     alignSelf: 'flex-start',
     backgroundColor: '#DBEAFE',
-    color: '#1E3A5F',
+    color: BRAND.indigo,
     overflow: 'hidden',
     fontSize: 11,
     fontWeight: '700',
@@ -967,7 +1014,7 @@ const styles = StyleSheet.create({
   pdfLink: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1E3A5F',
+    color: BRAND.blue,
   },
   pdfBtn: {
     marginTop: 8,
