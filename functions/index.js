@@ -7,6 +7,11 @@ const { setGlobalOptions } = require('firebase-functions/v2');
 initializeApp();
 setGlobalOptions({ region: 'europe-west1' });
 
+const t3 = require('./t3');
+exports.t3Catalog = t3.t3Catalog;
+exports.t3CreateTicket = t3.t3CreateTicket;
+exports.t3MyTickets = t3.t3MyTickets;
+
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_BATCH_SIZE = 100;
 const FCM_BATCH_SIZE = 500;
@@ -29,6 +34,7 @@ function wantsChannel(data, channel) {
 function webLinkForChannel(channel) {
   if (channel === 'farmatic') return 'https://taemsa-app.web.app/avisos/?tab=farmatic';
   if (channel === 'info') return 'https://taemsa-app.web.app/avisos/?tab=info';
+  if (channel === 'incidencia') return 'https://taemsa-app.web.app/avisos/?tab=incidencia';
   return 'https://taemsa-app.web.app/avisos/';
 }
 

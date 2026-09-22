@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Application from 'expo-application';
 
 const SESSION_KEY = 'taemsa-session-v1';
 /** Se conserva aunque se limpie la licencia, para no duplicar dispositivos. */
@@ -23,15 +25,39 @@ export function createDeviceId() {
   });
 }
 
+/**
+ * ID estable del aparato (sobrevive desinstalar/reinstalar la APK).
+ * Android: ANDROID_ID (mismo signing key + usuario + dispositivo).
+ * iOS: identifierForVendor.
+ */
+export async function getStableInstallKey() {
+  try {
+    if (Platform.OS === 'android') {
+      const id = Application.getAndroidId?.() || Application.androidId;
+      if (id) return `and-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    }
+    if (Platform.OS === 'ios' && typeof Application.getIosIdForVendorAsync === 'function') {
+      const id = await Application.getIosIdForVendorAsync();
+      if (id) return `ios-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    }
+  } catch (err) {
+    console.log('stable install key:', err?.message ?? err);
+  }
+  return null;
+}
+
 export async function getOrCreateDeviceId() {
   try {
     const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
     if (existing) return existing;
-    const id = createDeviceId();
+
+    // Preferir ID de hardware para que reinstalar no cree otro dispositivo en Firestore.
+    const stable = await getStableInstallKey();
+    const id = stable || createDeviceId();
     await AsyncStorage.setItem(DEVICE_ID_KEY, id);
     return id;
   } catch {
-    return createDeviceId();
+    return (await getStableInstallKey()) || createDeviceId();
   }
 }
 

@@ -57,10 +57,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
 
       match /receipts/{deviceId} {
-        // Lectura por uid (compatible con collectionGroup where uid == auth.uid).
-        // Escritura: dispositivo existente + cliente activo (no exige mismo uid en devices).
+        // Lectura: uid del recibo O dispositivo reclamado por la sesión actual
+        // (nueva sesión anónima en el mismo deviceId no pierde leídos).
+        // Escritura: dispositivo existente + cliente activo.
         allow read: if isAdmin()
-          || (isSignedIn() && resource.data.uid == request.auth.uid);
+          || (isSignedIn() && resource.data.uid == request.auth.uid)
+          || (isSignedIn()
+              && exists(/databases/$(database)/documents/devices/$(deviceId))
+              && get(/databases/$(database)/documents/devices/$(deviceId)).data.uid
+                == request.auth.uid);
         allow create, update: if isAdmin()
           || (isSignedIn()
               && request.resource.data.uid == request.auth.uid

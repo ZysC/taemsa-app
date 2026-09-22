@@ -17,6 +17,7 @@ const firebaseConfig = {
 export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 
 const app = initializeApp(firebaseConfig);
+export { app };
 
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
 

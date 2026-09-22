@@ -3,7 +3,7 @@
     "name": "TAEMSA",
     "slug": "mobile",
     "scheme": "taemsa",
-    "version": "1.2.5",
+    "version": "1.3.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,16 @@
           "color": "#1B6FE8",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TAEMSA necesita acceso a tus fotos para adjuntarlas a la incidencia.",
+          "cameraPermission": "TAEMSA necesita la cámara para adjuntar una foto a la incidencia."
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check"
     ],
     "ios": {
       "supportsTablet": true,
@@ -27,7 +36,7 @@
     },
     "android": {
       "package": "com.taemsa.app",
-      "versionCode": 8,
+      "versionCode": 14,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",

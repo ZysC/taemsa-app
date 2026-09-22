@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  collection, collectionGroup, onSnapshot, orderBy, query, where,
+  collection, doc, onSnapshot, orderBy, query,
 } from 'firebase/firestore';
-import { auth, db, ensureAppAuth } from './firebase';
+import { db, ensureAppAuth } from './firebase';
 import {
   ensureActiveSession,
   redeemClientCode,
@@ -13,8 +13,15 @@ import {
   updateDevicePrefs,
   markNotificationDelivered,
   markNotificationRead,
+  loadReceiptsCache,
+  saveReceiptsCache,
   DEFAULT_PREFS,
 } from './clientApi';
+import {
+  createT3Ticket,
+  fetchClientSupportEmail,
+  fetchMyT3Tickets,
+} from './t3Api';
 import { enableWebPush, restoreWebPush, listenForegroundMessages } from './webPush';
 import { setWebAppBadge } from './appBadge';
 import taemsaLogo from './assets/taemsa-logo.png';
@@ -58,6 +65,15 @@ export default function App() {
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [myReceipts, setMyReceipts] = useState({});
+  const [supportEmail, setSupportEmail] = useState('');
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [ticketBody, setTicketBody] = useState('');
+  const [ticketPhotos, setTicketPhotos] = useState([]);
+  const [ticketSending, setTicketSending] = useState(false);
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [ticketError, setTicketError] = useState('');
+  const [myTickets, setMyTickets] = useState([]);
   const deliveredIds = useRef(new Set());
   const tokenRef = useRef(null);
   const forceCreateRef = useRef(false);
@@ -79,6 +95,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'farmatic') setTab('farmatic');
     if (params.get('tab') === 'info') setTab('info');
+    if (params.get('tab') === 'incidencia') setTab('incidencia');
 
     ensureActiveSession()
       .then((session) => {
@@ -87,6 +104,8 @@ export default function App() {
           setClientName(session.clientName);
           setDeviceId(session.deviceId);
           setDeviceName(session.deviceName || '');
+          const cached = loadReceiptsCache(session.deviceId);
+          if (Object.keys(cached).length) setMyReceipts(cached);
         }
       })
       .finally(() => setCheckingSession(false));
@@ -99,7 +118,6 @@ export default function App() {
     let unsub = () => {};
     let unsubFarmatic = () => {};
     let unsubInfo = () => {};
-    let unsubReceipts = () => {};
     let unsubMsg = () => {};
     setDeviceStatus('Registrando…');
 
@@ -212,21 +230,6 @@ export default function App() {
         },
       );
 
-      if (auth.currentUser?.uid) {
-        unsubReceipts = onSnapshot(
-          query(collectionGroup(db, 'receipts'), where('uid', '==', auth.currentUser.uid)),
-          (snap) => {
-            const map = {};
-            snap.docs.forEach((d) => {
-              const notificationId = d.ref.parent.parent?.id;
-              if (notificationId) map[notificationId] = d.data();
-            });
-            setMyReceipts(map);
-          },
-          (err) => console.error(err),
-        );
-      }
-
       listenForegroundMessages((payload) => {
         const title = payload.notification?.title || payload.data?.title || 'TAEMSA';
         const body = payload.notification?.body || payload.data?.body || '';
@@ -242,10 +245,33 @@ export default function App() {
       unsub();
       unsubFarmatic();
       unsubInfo();
-      unsubReceipts();
       unsubMsg();
     };
   }, [clientId, clientName, deviceId, deviceName]);
+
+  const notificationIdsKey = notifications.map((n) => n.id).join(',');
+  useEffect(() => {
+    if (!deviceId || !notificationIdsKey) return undefined;
+    const ids = notificationIdsKey.split(',').filter(Boolean);
+    const unsubs = ids.map((notificationId) =>
+      onSnapshot(
+        doc(db, 'notifications', notificationId, 'receipts', deviceId),
+        (snap) => {
+          setMyReceipts((map) => {
+            if (!snap.exists()) return map;
+            return { ...map, [notificationId]: snap.data() };
+          });
+        },
+        (err) => console.error(err),
+      ),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [deviceId, notificationIdsKey]);
+
+  useEffect(() => {
+    if (!deviceId || Object.keys(myReceipts).length === 0) return;
+    saveReceiptsCache(deviceId, myReceipts);
+  }, [deviceId, myReceipts]);
 
   useEffect(() => {
     if (!deviceId || !clientName || !prefs.alerts || notifications.length === 0) return;
@@ -394,6 +420,133 @@ export default function App() {
   useEffect(() => {
     setWebAppBadge(unreadCount);
   }, [unreadCount]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setSupportEmail('');
+      return;
+    }
+    fetchClientSupportEmail(clientId)
+      .then((email) => setSupportEmail(email))
+      .catch(() => setSupportEmail(''));
+  }, [clientId]);
+
+  useEffect(() => {
+    if (tab !== 'incidencia' || !clientId || !deviceId) return undefined;
+    let cancelled = false;
+    (async () => {
+      setTicketsLoading(true);
+      setTicketsError('');
+      try {
+        const mine = await fetchMyT3Tickets({ clientId, deviceId });
+        if (cancelled) return;
+        setMyTickets(mine?.tickets || []);
+      } catch (err) {
+        if (!cancelled) setTicketsError(err?.message || 'No se pudo cargar el historial');
+      } finally {
+        if (!cancelled) setTicketsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tab, clientId, deviceId]);
+
+  const compressImageFile = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Imagen no válida'));
+      img.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+        const contentBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+        resolve({
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          previewUrl: dataUrl,
+          name: (file.name || 'foto.jpg').replace(/\.\w+$/, '.jpg'),
+          mime: 'image/jpeg',
+          contentBase64,
+        });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleTicketPhotosSelected = async (e) => {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!selected.length) return;
+    const remaining = 3 - ticketPhotos.length;
+    if (remaining <= 0) {
+      setTicketError('Máximo 3 fotos por incidencia.');
+      return;
+    }
+    try {
+      const next = [];
+      for (const file of selected.slice(0, remaining)) {
+        if (!file.type?.startsWith('image/')) continue;
+        next.push(await compressImageFile(file));
+      }
+      if (!next.length) {
+        setTicketError('Selecciona una imagen válida.');
+        return;
+      }
+      setTicketPhotos((prev) => [...prev, ...next].slice(0, 3));
+      setTicketError('');
+    } catch (err) {
+      setTicketError(err?.message || 'No se pudo añadir la foto');
+    }
+  };
+
+  const removeTicketPhoto = (id) => {
+    setTicketPhotos((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleSendTicket = async (e) => {
+    e?.preventDefault?.();
+    if (ticketSending || !clientId || !deviceId) return;
+    setTicketError('');
+    setTicketMessage('');
+    if (!supportEmail) {
+      setTicketError('Este cliente no tiene email configurado. Contacta con TAEMSA.');
+      return;
+    }
+    if (!ticketBody.trim()) {
+      setTicketError('Describe la incidencia.');
+      return;
+    }
+    setTicketSending(true);
+    try {
+      const result = await createT3Ticket({
+        clientId,
+        deviceId,
+        body: ticketBody.trim(),
+        files: ticketPhotos.map((p) => ({
+          name: p.name,
+          mime: p.mime,
+          contentBase64: p.contentBase64,
+        })),
+      });
+      setTicketBody('');
+      setTicketPhotos([]);
+      setTicketMessage(result?.code
+        ? `Incidencia creada: ${result.code}`
+        : 'Incidencia enviada a T3. Si no ves el código aquí, compruébalo en Tencloud.');
+      const mine = await fetchMyT3Tickets({ clientId, deviceId });
+      setMyTickets(mine?.tickets || []);
+    } catch (err) {
+      setTicketError(err?.message || 'No se pudo crear la incidencia');
+    } finally {
+      setTicketSending(false);
+    }
+  };
 
   if (checkingSession) {
     return (
@@ -563,6 +716,9 @@ export default function App() {
           <button type="button" className={tab === 'info' ? 'active' : ''} onClick={() => setTab('info')}>
             Información
           </button>
+          <button type="button" className={tab === 'incidencia' ? 'active' : ''} onClick={() => setTab('incidencia')}>
+            Incidencia
+          </button>
         </nav>
       )}
 
@@ -719,6 +875,87 @@ export default function App() {
               })}
             </div>
           )
+        )}
+
+        {tab === 'incidencia' && (
+          <div className="ticket-panel">
+            <h2>Nueva incidencia</h2>
+            <p className="hint">
+              Se enviará a soporte TAEMSA (Tencloud T3)
+              {supportEmail ? ` como ${supportEmail}` : ''}.
+            </p>
+
+            {!supportEmail ? (
+              <div className="empty">
+                <h2>Email no configurado</h2>
+                <p>Contacta con TAEMSA para activar incidencias</p>
+              </div>
+            ) : ticketsLoading ? (
+              <div className="loading">Cargando formulario…</div>
+            ) : (
+              <form className="ticket-form" onSubmit={handleSendTicket}>
+                {ticketsError && <div className="ticket-error">{ticketsError}</div>}
+
+                <p className="hint">Sección ONLINE · Tipología FARMATIC</p>
+
+                <label className="ticket-label" htmlFor="ticket-body">Descripción</label>
+                <textarea
+                  id="ticket-body"
+                  rows={5}
+                  placeholder="Describe el problema o la solicitud…"
+                  value={ticketBody}
+                  onChange={(e) => setTicketBody(e.target.value)}
+                  required
+                />
+
+                <label className="ticket-label" htmlFor="ticket-photos">Fotos (opcional, máx. 3)</label>
+                <input
+                  id="ticket-photos"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  onChange={handleTicketPhotosSelected}
+                />
+                {ticketPhotos.length > 0 && (
+                  <div className="photo-preview-row">
+                    {ticketPhotos.map((photo) => (
+                      <div key={photo.id} className="photo-preview">
+                        <img src={photo.previewUrl} alt={photo.name} />
+                        <button
+                          type="button"
+                          className="photo-remove"
+                          onClick={() => removeTicketPhoto(photo.id)}
+                          aria-label="Quitar foto"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {ticketError && <div className="ticket-error">{ticketError}</div>}
+                {ticketMessage && <div className="ticket-ok">{ticketMessage}</div>}
+
+                <button type="submit" className="send-btn" disabled={ticketSending}>
+                  {ticketSending ? 'Enviando…' : 'Enviar incidencia'}
+                </button>
+
+                {myTickets.length > 0 && (
+                  <div className="ticket-history">
+                    <h3>Últimas enviadas</h3>
+                    {myTickets.slice(0, 8).map((t) => (
+                      <div key={t.id} className="ticket-history-row">
+                        <strong>{t.code}</strong>
+                        <p>{t.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </form>
+            )}
+          </div>
         )}
 
         {tab === 'prefs' && (

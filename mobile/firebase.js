@@ -18,14 +18,45 @@ const firebaseConfig = {
 };
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+export { app };
 
 /**
- * Firebase 12 + Metro a veces no exporta getReactNativePersistence en el bundle web.
- * Persistencia propia del uid anónimo en AsyncStorage.
+ * Firebase 12: getReactNativePersistence a veces no llega al bundle de Metro.
+ * Misma API que el SDK RN (clase con type LOCAL + AsyncStorage).
  */
-const AUTH_UID_KEY = 'taemsa-firebase-auth-uid';
+function createAsyncStoragePersistence(storage) {
+  const PersistenceClass = class {
+    constructor() {
+      this.type = 'LOCAL';
+    }
+    async _isAvailable() {
+      try {
+        if (!storage) return false;
+        await storage.setItem('__firebase_auth_available', '1');
+        await storage.removeItem('__firebase_auth_available');
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    _set(key, value) {
+      return storage.setItem(key, JSON.stringify(value));
+    }
+    async _get(key) {
+      const json = await storage.getItem(key);
+      return json ? JSON.parse(json) : null;
+    }
+    _remove(key) {
+      return storage.removeItem(key);
+    }
+    _addListener() {}
+    _removeListener() {}
+  };
+  PersistenceClass.type = 'LOCAL';
+  return PersistenceClass;
+}
 
-function getReactNativePersistenceSafe() {
+function resolveAuthPersistence() {
   try {
     // eslint-disable-next-line import/no-extraneous-dependencies
     const authMod = require('firebase/auth');
@@ -33,15 +64,12 @@ function getReactNativePersistenceSafe() {
       return authMod.getReactNativePersistence(AsyncStorage);
     }
   } catch (_) {}
-  return undefined;
+  return createAsyncStoragePersistence(AsyncStorage);
 }
 
 let auth;
 try {
-  const persistence = getReactNativePersistenceSafe();
-  auth = persistence
-    ? initializeAuth(app, { persistence })
-    : initializeAuth(app);
+  auth = initializeAuth(app, { persistence: resolveAuthPersistence() });
 } catch {
   auth = getAuth(app);
 }
@@ -49,31 +77,17 @@ try {
 export { auth };
 export const db = getFirestore(app);
 
-/**
- * App Check nativo (Play Integrity) no está disponible con el Firebase JS SDK en Expo.
- * En web (panel + /avisos) sí usamos App Check con reCAPTCHA Enterprise.
- * Para Android nativo haría falta @react-native-firebase/app-check + nuevo build.
- */
-
 let authReady = null;
 
-/** Garantiza sesión anónima (reutiliza uid guardado si el SDK no persiste). */
+/** Garantiza sesión anónima (persiste en AsyncStorage vía Auth persistence). */
 export function ensureAppAuth() {
   if (!authReady) {
     authReady = (async () => {
       if (typeof auth.authStateReady === 'function') {
         await auth.authStateReady();
       }
-      if (auth.currentUser) {
-        try {
-          await AsyncStorage.setItem(AUTH_UID_KEY, auth.currentUser.uid);
-        } catch (_) {}
-        return auth.currentUser;
-      }
+      if (auth.currentUser) return auth.currentUser;
       const cred = await signInAnonymously(auth);
-      try {
-        await AsyncStorage.setItem(AUTH_UID_KEY, cred.user.uid);
-      } catch (_) {}
       return cred.user;
     })();
   }

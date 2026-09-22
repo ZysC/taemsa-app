@@ -9,12 +9,20 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN": "3E9EE90B-2963-43A5-A9EF-93AD3EF89D30",
+        "FIREBASE_APP_CHECK_DEBUG_TOKEN": "3E9EE90B-2963-43A5-A9EF-93AD3EF89D30"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN": "3E9EE90B-2963-43A5-A9EF-93AD3EF89D30",
+        "FIREBASE_APP_CHECK_DEBUG_TOKEN": "3E9EE90B-2963-43A5-A9EF-93AD3EF89D30"
       }
     },
     "production": {

@@ -5,6 +5,7 @@ import { normalizePrefs } from './prefs';
 import {
   clearSession,
   getOrCreateDeviceId,
+  getStableInstallKey,
   loadSession,
   normalizeClientCode,
   normalizeDeviceName,
@@ -122,6 +123,11 @@ export async function registerDevice({
     lastSeenAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  const installKey = await getStableInstallKey();
+  if (installKey) {
+    payload.installKey = installKey;
+  }
 
   if (token) {
     payload.token = token;

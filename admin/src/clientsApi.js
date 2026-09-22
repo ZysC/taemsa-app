@@ -20,9 +20,20 @@ export function normalizeClientCode(raw) {
     .replace(/\s+/g, '');
 }
 
-export async function createClient(name) {
+export function normalizeClientEmail(raw) {
+  return String(raw || '').trim().toLowerCase();
+}
+
+export function isValidEmail(raw) {
+  const email = normalizeClientEmail(raw);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export async function createClient(name, email) {
   const trimmed = name.trim();
+  const normalizedEmail = normalizeClientEmail(email);
   if (!trimmed) throw new Error('Nombre obligatorio');
+  if (!isValidEmail(normalizedEmail)) throw new Error('Email obligatorio y válido');
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = generateClientCode();
@@ -31,13 +42,24 @@ export async function createClient(name) {
     if (existing.exists()) continue;
     await setDoc(ref, {
       name: trimmed,
+      email: normalizedEmail,
       active: true,
       createdAt: serverTimestamp(),
       createdBy: auth.currentUser?.uid || '',
     });
-    return { id: code, name: trimmed, active: true };
+    return { id: code, name: trimmed, email: normalizedEmail, active: true };
   }
   throw new Error('No se pudo generar un código único');
+}
+
+export async function updateClientEmail(clientId, email) {
+  const normalizedEmail = normalizeClientEmail(email);
+  if (!isValidEmail(normalizedEmail)) throw new Error('Email obligatorio y válido');
+  await updateDoc(doc(db, 'clients', clientId), {
+    email: normalizedEmail,
+    updatedAt: serverTimestamp(),
+  });
+  return normalizedEmail;
 }
 
 export async function setClientActive(clientId, active) {

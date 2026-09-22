@@ -6,8 +6,60 @@ const CLIENT_NAME_KEY = 'taemsa_client_name';
 const DEVICE_ID_KEY = 'taemsa_device_id';
 const DEVICE_NAME_KEY = 'taemsa_device_name';
 const PREFS_KEY = 'taemsa_prefs';
+const RECEIPTS_CACHE_KEY = 'taemsa_receipts_cache_v1';
 
 export const DEFAULT_PREFS = { alerts: true, farmatic: true, info: true };
+
+function toMillis(value) {
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function loadReceiptsCache(deviceId) {
+  if (!deviceId) return {};
+  try {
+    const raw = localStorage.getItem(RECEIPTS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed?.deviceId !== deviceId || !parsed?.receipts) return {};
+    const out = {};
+    Object.entries(parsed.receipts).forEach(([id, data]) => {
+      if (!data) return;
+      out[id] = {};
+      if (data.readAt != null) out[id].readAt = new Date(data.readAt);
+      if (data.deliveredAt != null) out[id].deliveredAt = new Date(data.deliveredAt);
+    });
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveReceiptsCache(deviceId, receipts) {
+  if (!deviceId) return;
+  try {
+    const serialized = {};
+    Object.entries(receipts || {}).forEach(([id, data]) => {
+      if (!data) return;
+      const readAt = toMillis(data.readAt);
+      const deliveredAt = toMillis(data.deliveredAt);
+      if (readAt == null && deliveredAt == null) return;
+      serialized[id] = {};
+      if (readAt != null) serialized[id].readAt = readAt;
+      if (deliveredAt != null) serialized[id].deliveredAt = deliveredAt;
+    });
+    localStorage.setItem(
+      RECEIPTS_CACHE_KEY,
+      JSON.stringify({ deviceId, receipts: serialized, updatedAt: Date.now() }),
+    );
+  } catch {
+    // ignore
+  }
+}
 
 export function normalizePrefs(prefs) {
   return {
@@ -246,6 +298,7 @@ export async function markNotificationDelivered({ notificationId, deviceId, clie
   await setDoc(
     doc(db, 'notifications', notificationId, 'receipts', deviceId),
     {
+      deviceId,
       clientName,
       deviceName: deviceName || '',
       uid: auth.currentUser.uid,
@@ -261,6 +314,7 @@ export async function markNotificationRead({ notificationId, deviceId, clientNam
   await setDoc(
     doc(db, 'notifications', notificationId, 'receipts', deviceId),
     {
+      deviceId,
       clientName,
       deviceName: deviceName || '',
       uid: auth.currentUser.uid,

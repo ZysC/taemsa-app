@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TextInput, Pressable, Switch, Image,
   Platform, StatusBar, ActivityIndicator, RefreshControl, KeyboardAvoidingView, Linking,
+  ScrollView,
 } from 'react-native';
 import Constants from 'expo-constants';
-import { db, ensureAppAuth, auth } from './firebase';
+import { db, ensureAppAuth } from './firebase';
 import {
-  collection, collectionGroup, onSnapshot, orderBy, query, where,
+  collection, doc, onSnapshot, orderBy, query,
 } from 'firebase/firestore';
 import {
   ensureActiveSession,
@@ -16,10 +17,17 @@ import {
   updateDevicePrefs,
 } from './registerDevice';
 import { markNotificationDelivered, markNotificationRead } from './receipts';
+import {
+  createT3Ticket,
+  fetchClientSupportEmail,
+  fetchMyT3Tickets,
+} from './t3Api';
 import { DEFAULT_PREFS } from './prefs';
 import { loadPrefs, savePrefs } from './prefsStorage';
+import { loadReceiptsCache, saveReceiptsCache } from './receiptsCache';
 import { setAppIconBadge } from './badge';
 import { clearSession } from './clientSession';
+import { ensureAppCheck } from './appCheck';
 
 const canUsePush = Constants.executionEnvironment !== 'storeClient';
 const logoSource = require('./assets/taemsa-logo.png');
@@ -68,6 +76,15 @@ export default function App() {
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [myReceipts, setMyReceipts] = useState({});
+  const [supportEmail, setSupportEmail] = useState('');
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [ticketBody, setTicketBody] = useState('');
+  const [ticketPhotos, setTicketPhotos] = useState([]);
+  const [ticketSending, setTicketSending] = useState(false);
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [ticketError, setTicketError] = useState('');
+  const [myTickets, setMyTickets] = useState([]);
   const unsubscribePush = useRef(() => {});
   const deliveredIds = useRef(new Set());
   const tokenRef = useRef(null);
@@ -84,17 +101,27 @@ export default function App() {
   };
 
   useEffect(() => {
-    Promise.all([ensureActiveSession(), loadPrefs()])
-      .then(([session, loadedPrefs]) => {
-        if (session) {
-          setClientId(session.clientId);
-          setClientName(session.clientName);
-          setDeviceId(session.deviceId);
-          setDeviceName(session.deviceName || '');
-        }
-        setPrefs(loadedPrefs);
-      })
-      .finally(() => setCheckingSession(false));
+    (async () => {
+      try {
+        await ensureAppCheck();
+      } catch (err) {
+        console.log('App Check no disponible:', err?.message ?? err);
+      }
+
+      const [session, loadedPrefs] = await Promise.all([
+        ensureActiveSession(),
+        loadPrefs(),
+      ]);
+      if (session) {
+        setClientId(session.clientId);
+        setClientName(session.clientName);
+        setDeviceId(session.deviceId);
+        setDeviceName(session.deviceName || '');
+        const cached = await loadReceiptsCache(session.deviceId);
+        if (Object.keys(cached).length) setMyReceipts(cached);
+      }
+      setPrefs(loadedPrefs);
+    })().finally(() => setCheckingSession(false));
   }, []);
 
   useEffect(() => {
@@ -104,7 +131,6 @@ export default function App() {
     let unsubNotif = () => {};
     let unsubFarmatic = () => {};
     let unsubInfo = () => {};
-    let unsubReceipts = () => {};
     setDeviceStatus('Registrando dispositivo…');
 
     const afterRegister = async (token, expoGo) => {
@@ -155,28 +181,33 @@ export default function App() {
       }
       if (cancelled) return;
 
-      if (canUsePush) {
-        import('./pushNotifications').then(async (push) => {
-          if (cancelled) return;
-          unsubscribePush.current = push.subscribeToPushListeners();
-          const token = await push.registerForPushNotificationsAsync();
-          if (cancelled) return;
+      // Registrar dispositivo ANTES de leer acuses (las reglas usan devices.uid).
+      try {
+        if (canUsePush) {
           try {
+            const push = await import('./pushNotifications');
+            if (cancelled) return;
+            unsubscribePush.current = push.subscribeToPushListeners();
+            const token = await push.registerForPushNotificationsAsync();
+            if (cancelled) return;
             await afterRegister(token, false);
             if (!cancelled && !token) {
               setPushReady(false);
               setDeviceStatus(`${clientName} · ${deviceName}`);
             }
-          } catch (err) {
-            await failRegister(err);
+          } catch (pushErr) {
+            console.log('Push no disponible:', pushErr?.message ?? pushErr);
+            await afterRegister(null, false);
           }
-        }).catch((err) => {
-          console.log('Push no disponible:', err?.message ?? err);
-          afterRegister(null, false).catch(failRegister);
-        });
-      } else {
-        afterRegister(null, true).catch(failRegister);
+        } else {
+          await afterRegister(null, true);
+        }
+      } catch (err) {
+        await failRegister(err);
+        if (cancelled) return;
+        // Seguir escuchando datos aunque falle el registro (p. ej. red).
       }
+      if (cancelled) return;
 
       unsubNotif = onSnapshot(
         query(collection(db, 'notifications'), orderBy('createdAt', 'desc')),
@@ -219,21 +250,6 @@ export default function App() {
           setInfoLoading(false);
         },
       );
-
-      if (auth.currentUser?.uid) {
-        unsubReceipts = onSnapshot(
-          query(collectionGroup(db, 'receipts'), where('uid', '==', auth.currentUser.uid)),
-          (snapshot) => {
-            const map = {};
-            snapshot.docs.forEach((d) => {
-              const notificationId = d.ref.parent.parent?.id;
-              if (notificationId) map[notificationId] = d.data();
-            });
-            setMyReceipts(map);
-          },
-          (err) => console.log('Error leyendo receipts:', err?.message ?? err),
-        );
-      }
     })();
 
     return () => {
@@ -242,9 +258,34 @@ export default function App() {
       unsubNotif();
       unsubFarmatic();
       unsubInfo();
-      unsubReceipts();
     };
   }, [clientId, clientName, deviceId, deviceName]);
+
+  // Acuses por deviceId (estable), no por uid anónimo (puede rotar sin persistencia).
+  // Cache local evita el flash "sin leer" al reabrir antes de que llegue Firestore.
+  const notificationIdsKey = notifications.map((n) => n.id).join(',');
+  useEffect(() => {
+    if (!deviceId || !notificationIdsKey) return undefined;
+    const ids = notificationIdsKey.split(',').filter(Boolean);
+    const unsubs = ids.map((notificationId) =>
+      onSnapshot(
+        doc(db, 'notifications', notificationId, 'receipts', deviceId),
+        (snap) => {
+          setMyReceipts((map) => {
+            if (!snap.exists()) return map;
+            return { ...map, [notificationId]: snap.data() };
+          });
+        },
+        (err) => console.log('Error leyendo receipt:', err?.message ?? err),
+      ),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [deviceId, notificationIdsKey]);
+
+  useEffect(() => {
+    if (!deviceId || Object.keys(myReceipts).length === 0) return;
+    saveReceiptsCache(deviceId, myReceipts);
+  }, [deviceId, myReceipts]);
 
   useEffect(() => {
     if (!deviceId || !clientName || !prefs.alerts || notifications.length === 0) return;
@@ -368,6 +409,135 @@ export default function App() {
   useEffect(() => {
     setAppIconBadge(unreadCount);
   }, [unreadCount]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setSupportEmail('');
+      return;
+    }
+    fetchClientSupportEmail(clientId)
+      .then((email) => setSupportEmail(email))
+      .catch(() => setSupportEmail(''));
+  }, [clientId]);
+
+  const loadT3Panel = async () => {
+    if (!clientId || !deviceId) return;
+    setTicketsLoading(true);
+    setTicketsError('');
+    try {
+      const mine = await fetchMyT3Tickets({ clientId, deviceId });
+      setMyTickets(mine?.tickets || []);
+    } catch (err) {
+      setTicketsError(err?.message || 'No se pudo cargar el historial');
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab !== 'incidencia' || !clientId || !deviceId) return undefined;
+    loadT3Panel();
+    return undefined;
+  }, [tab, clientId, deviceId]);
+
+  const pickTicketPhoto = async (fromCamera) => {
+    if (ticketPhotos.length >= 3) {
+      setTicketError('Máximo 3 fotos por incidencia.');
+      return;
+    }
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const permission = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setTicketError(fromCamera
+          ? 'Necesitamos permiso de cámara.'
+          : 'Necesitamos permiso para acceder a la galería.');
+        return;
+      }
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          quality: 0.55,
+          allowsEditing: false,
+          base64: true,
+          exif: false,
+        })
+        : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          quality: 0.55,
+          allowsEditing: false,
+          base64: true,
+          exif: false,
+          selectionLimit: 1,
+        });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        setTicketError('No se pudo leer la imagen. Prueba otra.');
+        return;
+      }
+      const mime = asset.mimeType || 'image/jpeg';
+      const ext = mime.includes('png') ? 'png' : 'jpg';
+      const name = asset.fileName || `foto-${Date.now()}.${ext}`;
+      setTicketPhotos((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          uri: asset.uri,
+          name,
+          mime,
+          contentBase64: asset.base64,
+        },
+      ].slice(0, 3));
+      setTicketError('');
+    } catch (err) {
+      setTicketError(err?.message || 'No se pudo añadir la foto');
+    }
+  };
+
+  const removeTicketPhoto = (id) => {
+    setTicketPhotos((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleSendTicket = async () => {
+    if (ticketSending || !clientId || !deviceId) return;
+    setTicketError('');
+    setTicketMessage('');
+    if (!supportEmail) {
+      setTicketError('Este cliente no tiene email configurado. Contacta con TAEMSA.');
+      return;
+    }
+    if (!ticketBody.trim()) {
+      setTicketError('Describe la incidencia.');
+      return;
+    }
+    setTicketSending(true);
+    try {
+      const result = await createT3Ticket({
+        clientId,
+        deviceId,
+        body: ticketBody.trim(),
+        files: ticketPhotos.map((p) => ({
+          name: p.name,
+          mime: p.mime,
+          contentBase64: p.contentBase64,
+        })),
+      });
+      setTicketBody('');
+      setTicketPhotos([]);
+      setTicketMessage(result?.code
+        ? `Incidencia creada: ${result.code}`
+        : 'Incidencia enviada a T3. Si no ves el código aquí, compruébalo en Tencloud.');
+      const mine = await fetchMyT3Tickets({ clientId, deviceId });
+      setMyTickets(mine?.tickets || []);
+    } catch (err) {
+      setTicketError(err?.message || 'No se pudo crear la incidencia');
+    } finally {
+      setTicketSending(false);
+    }
+  };
 
   const renderItem = ({ item }) => {
     const type = TYPE_COLORS[item.type] || TYPE_COLORS.info;
@@ -614,6 +784,12 @@ export default function App() {
           >
             <Text style={[styles.tabText, tab === 'info' && styles.tabTextActive]}>Información</Text>
           </Pressable>
+          <Pressable
+            style={[styles.tab, tab === 'incidencia' && styles.tabActive]}
+            onPress={() => setTab('incidencia')}
+          >
+            <Text style={[styles.tabText, tab === 'incidencia' && styles.tabTextActive]}>Incidencia</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -690,6 +866,95 @@ export default function App() {
             contentContainerStyle={styles.list}
           />
         )
+      )}
+
+      {tab === 'incidencia' && (
+        <ScrollView contentContainerStyle={styles.ticketBox} keyboardShouldPersistTaps="handled">
+          <Text style={styles.prefsTitle}>Nueva incidencia</Text>
+          <Text style={styles.prefsHint}>
+            Se enviará a soporte TAEMSA (Tencloud T3)
+            {supportEmail ? ` como ${supportEmail}` : ''}.
+          </Text>
+
+          {!supportEmail ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Email no configurado</Text>
+              <Text style={styles.emptySubText}>Contacta con TAEMSA para activar incidencias</Text>
+            </View>
+          ) : ticketsLoading ? (
+            <ActivityIndicator size="large" color={BRAND.blue} style={{ marginTop: 24 }} />
+          ) : (
+            <>
+              {ticketsError ? (
+                <Text style={styles.ticketError}>{ticketsError}</Text>
+              ) : null}
+
+              <Text style={styles.prefsHint}>Sección ONLINE · Tipología FARMATIC</Text>
+
+              <Text style={styles.ticketLabel}>Descripción</Text>
+              <TextInput
+                style={styles.ticketInput}
+                multiline
+                numberOfLines={5}
+                placeholder="Describe el problema o la solicitud…"
+                placeholderTextColor="#94A3B8"
+                value={ticketBody}
+                onChangeText={setTicketBody}
+                textAlignVertical="top"
+              />
+
+              <Text style={styles.ticketLabel}>Fotos (opcional, máx. 3)</Text>
+              <View style={styles.photoActions}>
+                <Pressable style={styles.photoBtn} onPress={() => pickTicketPhoto(true)}>
+                  <Text style={styles.photoBtnText}>Hacer foto</Text>
+                </Pressable>
+                <Pressable style={styles.photoBtn} onPress={() => pickTicketPhoto(false)}>
+                  <Text style={styles.photoBtnText}>Galería</Text>
+                </Pressable>
+              </View>
+              {ticketPhotos.length > 0 ? (
+                <View style={styles.photoPreviewRow}>
+                  {ticketPhotos.map((photo) => (
+                    <View key={photo.id} style={styles.photoPreview}>
+                      <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
+                      <Pressable
+                        style={styles.photoRemove}
+                        onPress={() => removeTicketPhoto(photo.id)}
+                      >
+                        <Text style={styles.photoRemoveText}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {ticketError ? <Text style={styles.ticketError}>{ticketError}</Text> : null}
+              {ticketMessage ? <Text style={styles.ticketOk}>{ticketMessage}</Text> : null}
+
+              <Pressable
+                style={[styles.ticketBtn, ticketSending && styles.ticketBtnDisabled]}
+                onPress={handleSendTicket}
+                disabled={ticketSending}
+              >
+                <Text style={styles.ticketBtnText}>
+                  {ticketSending ? 'Enviando…' : 'Enviar incidencia'}
+                </Text>
+              </Pressable>
+
+              {myTickets.length > 0 ? (
+                <View style={styles.ticketHistory}>
+                  <Text style={styles.ticketLabel}>Últimas enviadas</Text>
+                  {myTickets.slice(0, 8).map((t) => (
+                    <View key={t.id} style={styles.ticketHistoryRow}>
+                      <Text style={styles.ticketHistoryCode}>{t.code}</Text>
+                      <Text style={styles.ticketHistoryBody} numberOfLines={2}>{t.body}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </>
+          )}
+        </ScrollView>
       )}
 
       {tab === 'prefs' && (
@@ -836,12 +1101,152 @@ const styles = StyleSheet.create({
     borderBottomColor: BRAND.blue,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
   },
   tabTextActive: {
     color: BRAND.blue,
+  },
+  ticketBox: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  ticketLabel: {
+    marginTop: 14,
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0',
+  },
+  chipOn: {
+    backgroundColor: BRAND.blue,
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  chipTextOn: {
+    color: '#FFFFFF',
+  },
+  ticketInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoBtn: {
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  photoBtnText: {
+    fontWeight: '700',
+    color: '#334155',
+    fontSize: 14,
+  },
+  photoPreviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  photoPreview: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#E2E8F0',
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15,23,42,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ticketBtn: {
+    marginTop: 16,
+    backgroundColor: BRAND.blue,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  ticketBtnDisabled: {
+    opacity: 0.6,
+  },
+  ticketBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  ticketError: {
+    marginTop: 10,
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ticketOk: {
+    marginTop: 10,
+    color: '#047857',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ticketHistory: {
+    marginTop: 24,
+  },
+  ticketHistoryRow: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  ticketHistoryCode: {
+    fontWeight: '700',
+    color: BRAND.blue,
+    marginBottom: 4,
+  },
+  ticketHistoryBody: {
+    color: '#64748B',
+    fontSize: 13,
   },
   registerBox: {
     padding: 24,

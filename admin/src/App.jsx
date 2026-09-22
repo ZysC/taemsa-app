@@ -19,6 +19,7 @@ import {
   createClient,
   deleteClientAndDevices,
   setClientActive,
+  updateClientEmail,
 } from './clientsApi';
 import Login from './Login';
 import './App.css';
@@ -99,6 +100,10 @@ function AdminPanel({ user }) {
   const [loadingReceipts, setLoadingReceipts] = useState(null);
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [clientNameInput, setClientNameInput] = useState('');
+  const [clientEmailInput, setClientEmailInput] = useState('');
+  const [editingEmailId, setEditingEmailId] = useState('');
+  const [editingEmailValue, setEditingEmailValue] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
   const [createdCode, setCreatedCode] = useState('');
   const [clientSuccess, setClientSuccess] = useState('');
@@ -289,12 +294,13 @@ function AdminPanel({ user }) {
 
   const handleCreateClient = async (e) => {
     e.preventDefault();
-    if (!clientNameInput.trim() || creatingClient) return;
+    if (!clientNameInput.trim() || !clientEmailInput.trim() || creatingClient) return;
     setCreatingClient(true);
     setCreatedCode('');
     try {
-      const created = await createClient(clientNameInput);
+      const created = await createClient(clientNameInput, clientEmailInput);
       setClientNameInput('');
+      setClientEmailInput('');
       setCreatedCode(created.id);
       setClientSuccess(`Cliente creado: ${created.name}`);
       setTimeout(() => setClientSuccess(''), 4000);
@@ -302,6 +308,27 @@ function AdminPanel({ user }) {
       alert('Error al crear cliente: ' + err.message);
     } finally {
       setCreatingClient(false);
+    }
+  };
+
+  const startEditEmail = (client) => {
+    setEditingEmailId(client.id);
+    setEditingEmailValue(client.email || '');
+  };
+
+  const handleSaveClientEmail = async (client) => {
+    if (savingEmail) return;
+    setSavingEmail(true);
+    try {
+      const email = await updateClientEmail(client.id, editingEmailValue);
+      setEditingEmailId('');
+      setEditingEmailValue('');
+      setClientSuccess(`Email actualizado: ${email}`);
+      setTimeout(() => setClientSuccess(''), 2500);
+    } catch (err) {
+      alert('Error al guardar email: ' + err.message);
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -936,6 +963,17 @@ function AdminPanel({ user }) {
                   required
                 />
               </div>
+              <div className="form-group">
+                <label htmlFor="client-email">Email (contacto T3)</label>
+                <input
+                  id="client-email"
+                  type="email"
+                  placeholder="Ej: farmacia@ejemplo.com"
+                  value={clientEmailInput}
+                  onChange={(e) => setClientEmailInput(e.target.value)}
+                  required
+                />
+              </div>
               <button type="submit" className="send-btn" disabled={creatingClient}>
                 {creatingClient ? 'Creando…' : 'Crear cliente y generar código'}
               </button>
@@ -987,6 +1025,43 @@ function AdminPanel({ user }) {
                         <code>{client.id}</code>
                         <span>{stats.count === 0 ? 'Sin dispositivos' : `${stats.count} dispositivo(s)`}</span>
                         <span>{formatLastSeen(stats.lastSeenAt)}</span>
+                      </div>
+                      <div className="client-meta client-email-row">
+                        {editingEmailId === client.id ? (
+                          <>
+                            <input
+                              type="email"
+                              className="client-email-input"
+                              value={editingEmailValue}
+                              onChange={(e) => setEditingEmailValue(e.target.value)}
+                              placeholder="email@farmacia.com"
+                            />
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              disabled={savingEmail}
+                              onClick={() => handleSaveClientEmail(client)}
+                            >
+                              {savingEmail ? 'Guardando…' : 'Guardar email'}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              onClick={() => { setEditingEmailId(''); setEditingEmailValue(''); }}
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className={client.email ? '' : 'client-email-missing'}>
+                              {client.email || 'Sin email T3'}
+                            </span>
+                            <button type="button" className="ghost-btn" onClick={() => startEditEmail(client)}>
+                              {client.email ? 'Editar email' : 'Añadir email'}
+                            </button>
+                          </>
+                        )}
                       </div>
                       <button
                         type="button"

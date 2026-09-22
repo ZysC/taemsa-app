@@ -6,6 +6,7 @@ export async function markNotificationDelivered({ notificationId, deviceId, clie
   await setDoc(
     doc(db, 'notifications', notificationId, 'receipts', deviceId),
     {
+      deviceId,
       clientName,
       deviceName: deviceName || '',
       uid: auth.currentUser.uid,
@@ -20,6 +21,7 @@ export async function markNotificationRead({ notificationId, deviceId, clientNam
   await setDoc(
     doc(db, 'notifications', notificationId, 'receipts', deviceId),
     {
+      deviceId,
       clientName,
       deviceName: deviceName || '',
       uid: auth.currentUser.uid,
